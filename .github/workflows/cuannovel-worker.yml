@@ -1,0 +1,16 @@
+name: CuanNovel Sequential Worker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CuanNovel Worker on Vercel
+        run: |
+          curl -fsS -X POST "${{ secrets.VERCEL_APP_URL }}/api/worker" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
