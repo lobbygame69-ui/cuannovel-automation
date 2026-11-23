@@ -33,8 +33,22 @@ export interface CuanNovelQueueItem {
   last_error: string | null;
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function getEnv(name: string, fallback = ''): string {
   return (process.env[name] || fallback).trim();
+}
+
+export function resolveUserId(rawUserId?: string | null): string {
+  const candidate = String(rawUserId || '').trim() || getEnv('DEFAULT_USER_ID');
+  if (!candidate) {
+    throw new Error('DEFAULT_USER_ID belum diatur di Environment Variables.');
+  }
+  if (!UUID_REGEX.test(candidate)) {
+    throw new Error(`DEFAULT_USER_ID tidak berformat UUID valid: "${candidate}"`);
+  }
+  return candidate;
 }
 
 export function normalizeLang(raw?: string | null): 'id' | 'en' {
@@ -52,6 +66,10 @@ export async function sbFetch(path: string, init: RequestInit = {}) {
   const serviceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!baseUrl || !serviceKey) {
+    console.error('[sbFetch] Missing env:', {
+      hasUrl: Boolean(baseUrl),
+      hasServiceKey: Boolean(serviceKey)
+    });
     throw new Error('SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diatur.');
   }
 
@@ -63,7 +81,10 @@ export async function sbFetch(path: string, init: RequestInit = {}) {
     headers.set('Prefer', 'return=representation');
   }
 
-  const res = await fetch(`${baseUrl}/rest/v1/${path.replace(/^\/+/, '')}`, {
+  const cleanPath = path.replace(/^\/+/, '');
+  const url = `${baseUrl}/rest/v1/${cleanPath}`;
+
+  const res = await fetch(url, {
     ...init,
     headers,
     cache: 'no-store'
@@ -78,10 +99,64 @@ export async function sbFetch(path: string, init: RequestInit = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(`Supabase error (${res.status}): ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+    console.error('[sbFetch] Error response:', {
+      path: cleanPath,
+      method: init.method || 'GET',
+      status: res.status,
+      data
+    });
+    throw new Error(
+      `Supabase error (${res.status}) on ${cleanPath}: ${
+        typeof data === 'string' ? data : JSON.stringify(data)
+      }`
+    );
   }
 
   return data;
+}
+
+export async function createDraftBatch(params: {
+  chatId: string | number;
+  userId?: string | null;
+  authorName?: string;
+  publisherName?: string;
+  language?: 'id' | 'en' | string;
+  targetPassed?: number;
+  maxAttempts?: number;
+}): Promise<CuanNovelBatch> {
+  const userId = resolveUserId(params.userId);
+  const nowIso = new Date().toISOString();
+
+  const body = {
+    user_id: userId,
+    telegram_chat_id: String(params.chatId),
+    author_name: (params.authorName || 'M. F. JULIAN').trim(),
+    publisher_name: (params.publisherName || 'cuannovelkarya').trim(),
+    language: normalizeLang(params.language),
+    target_passed: Number.isFinite(params.targetPassed) && Number(params.targetPassed) > 0
+      ? Number(params.targetPassed)
+      : 2,
+    passed_count: 0,
+    deleted_count: 0,
+    total_attempts: 0,
+    max_attempts: Number.isFinite(params.maxAttempts) && Number(params.maxAttempts) > 0
+      ? Number(params.maxAttempts)
+      : 10,
+    status: 'draft',
+    created_at: nowIso,
+    updated_at: nowIso
+  };
+
+  const rows = (await sbFetch('cuannovel_batches', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })) as CuanNovelBatch[] | null;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('Insert ke cuannovel_batches tidak mengembalikan data batch.');
+  }
+
+  return rows[0];
 }
 
 export async function sendTelegramMessage(
@@ -91,6 +166,7 @@ export async function sendTelegramMessage(
 ) {
   const token = getEnv('TELEGRAM_BOT_TOKEN');
   if (!token) {
+    console.error('[sendTelegramMessage] TELEGRAM_BOT_TOKEN kosong');
     throw new Error('TELEGRAM_BOT_TOKEN belum diatur.');
   }
 
@@ -112,6 +188,11 @@ export async function sendTelegramMessage(
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !(json as { ok?: boolean }).ok) {
+    console.error('[sendTelegramMessage] Failed:', {
+      chatId: String(chatId),
+      status: res.status,
+      json
+    });
     throw new Error(`Telegram sendMessage gagal: ${JSON.stringify(json)}`);
   }
   return json;
@@ -129,7 +210,9 @@ export async function answerCallbackQuery(callbackQueryId: string, text = 'Dipro
       text
     }),
     cache: 'no-store'
-  }).catch(() => null);
+  }).catch((err) => {
+    console.error('[answerCallbackQuery] Failed:', err);
+  });
 }
 
 export function buildConfirmationKeyboard(batchId: string) {
