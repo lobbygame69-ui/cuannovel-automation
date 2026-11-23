@@ -344,8 +344,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[POST /api/telegram] Error:', message);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error('[POST /api/telegram] Error:', message, stack);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: message,
+        stack: stack ? stack.split('\n').slice(0, 5) : undefined
+      },
+      { status: 500 }
+    );
   }
 }
 
