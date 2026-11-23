@@ -62,7 +62,10 @@ export function langLabel(lang?: string | null): string {
 }
 
 export async function sbFetch(path: string, init: RequestInit = {}) {
-  const baseUrl = getEnv('SUPABASE_URL').replace(/\/+$/, '');
+  const baseUrl = getEnv('SUPABASE_URL')
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/i, '')
+    .replace(/\/+$/, '');
   const serviceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!baseUrl || !serviceKey) {
@@ -133,15 +136,17 @@ export async function createDraftBatch(params: {
     author_name: (params.authorName || 'M. F. JULIAN').trim(),
     publisher_name: (params.publisherName || 'cuannovelkarya').trim(),
     language: normalizeLang(params.language),
-    target_passed: Number.isFinite(params.targetPassed) && Number(params.targetPassed) > 0
-      ? Number(params.targetPassed)
-      : 2,
+    target_passed:
+      Number.isFinite(params.targetPassed) && Number(params.targetPassed) > 0
+        ? Number(params.targetPassed)
+        : 2,
     passed_count: 0,
     deleted_count: 0,
     total_attempts: 0,
-    max_attempts: Number.isFinite(params.maxAttempts) && Number(params.maxAttempts) > 0
-      ? Number(params.maxAttempts)
-      : 10,
+    max_attempts:
+      Number.isFinite(params.maxAttempts) && Number(params.maxAttempts) > 0
+        ? Number(params.maxAttempts)
+        : 10,
     status: 'draft',
     created_at: nowIso,
     updated_at: nowIso
