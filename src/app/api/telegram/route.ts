@@ -8,6 +8,7 @@ import {
   getEnv,
   langLabel,
   normalizeLang,
+  resolveUserId,
   sbFetch,
   sendTelegramMessage
 } from '@/lib/cuannovel';
@@ -22,14 +23,11 @@ async function getLatestBatchForChat(chatId: string): Promise<CuanNovelBatch | n
 }
 
 async function createDraftBatch(chatId: string, overrideLang?: 'id' | 'en'): Promise<CuanNovelBatch> {
-  const userId = getEnv('DEFAULT_USER_ID');
-  if (!userId) {
-    throw new Error('DEFAULT_USER_ID belum diatur.');
-  }
-
+  const userId = resolveUserId();
   const defaultAuthor = getEnv('DEFAULT_AUTHOR_NAME', 'M. F. JULIAN');
   const defaultPublisher = getEnv('DEFAULT_PUBLISHER_NAME', 'cuannovelkarya');
   const language = overrideLang || normalizeLang(getEnv('DEFAULT_LANGUAGE', 'id'));
+  const nowIso = new Date().toISOString();
 
   const inserted = (await sbFetch('cuannovel_batches', {
     method: 'POST',
@@ -44,9 +42,15 @@ async function createDraftBatch(chatId: string, overrideLang?: 'id' | 'en'): Pro
       deleted_count: 0,
       total_attempts: 0,
       max_attempts: 10,
-      status: 'awaiting_confirmation'
+      status: 'draft',
+      created_at: nowIso,
+      updated_at: nowIso
     })
   })) as CuanNovelBatch[];
+
+  if (!Array.isArray(inserted) || inserted.length === 0) {
+    throw new Error('Gagal membuat draft batch di cuannovel_batches.');
+  }
 
   return inserted[0];
 }
@@ -114,7 +118,7 @@ async function handleStartBatch(chatId: string, batch: CuanNovelBatch, targetPas
 
 async function handleStopBatch(chatId: string) {
   const activeRows = (await sbFetch(
-    `cuannovel_batches?telegram_chat_id=eq.${encodeURIComponent(chatId)}&status=in.(running,awaiting_confirmation)&order=created_at.desc`
+    `cuannovel_batches?telegram_chat_id=eq.${encodeURIComponent(chatId)}&status=in.(running,draft,awaiting_confirmation)&order=created_at.desc`
   )) as CuanNovelBatch[];
 
   if (!Array.isArray(activeRows) || activeRows.length === 0) {
@@ -179,12 +183,16 @@ async function handleStatusBatch(chatId: string) {
 }
 
 async function parseAndApplyMetaEdit(chatId: string, text: string): Promise<boolean> {
-  if (!text.toLowerCase().includes('penulis:') && !text.toLowerCase().includes('penerbit:') && !text.toLowerCase().includes('bahasa:')) {
+  if (
+    !text.toLowerCase().includes('penulis:') &&
+    !text.toLowerCase().includes('penerbit:') &&
+    !text.toLowerCase().includes('bahasa:')
+  ) {
     return false;
   }
 
   let batch = await getLatestBatchForChat(chatId);
-  if (!batch || (batch.status !== 'awaiting_confirmation' && batch.status !== 'running')) {
+  if (!batch || (batch.status !== 'draft' && batch.status !== 'awaiting_confirmation' && batch.status !== 'running')) {
     batch = await createDraftBatch(chatId);
   }
 
@@ -336,6 +344,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error('[POST /api/telegram] Error:', message);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
