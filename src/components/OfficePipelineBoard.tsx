@@ -49,8 +49,10 @@ interface WorkerProfile {
   doneCoffeeBubbles: string[];
   doneSmokeBubbles: string[];
   strollBubbles: string[];
+  skinTone: string;
+  skinShadow: string;
   shirtMain: string;
-  shirtTrim: string;
+  shirtShadow: string;
   pantsColor: string;
   hairColor: string;
   cupColor: string;
@@ -72,8 +74,10 @@ const WORKER_PROFILES: WorkerProfile[] = [
     doneCoffeeBubbles: ['Riset beres! Ngopi hitam dulu', 'Tugas kelar, sruput kopi'],
     doneSmokeBubbles: ['Riset selesai, ngerokok di teras', 'Beres! Santai di luar dulu'],
     strollBubbles: ['Lirik-lirik tren baru', 'Jalan mikir sinopsis'],
+    skinTone: '#f3c69f',
+    skinShadow: '#d99b6c',
     shirtMain: '#0284c7',
-    shirtTrim: '#e0f2fe',
+    shirtShadow: '#0369a1',
     pantsColor: '#1e293b',
     hairColor: '#0f172a',
     cupColor: '#3f2e21',
@@ -93,8 +97,10 @@ const WORKER_PROFILES: WorkerProfile[] = [
     doneCoffeeBubbles: ['Nulis beres! Ngeteh hangat dulu', 'Bab selesai, teh & roti mantap'],
     doneSmokeBubbles: ['Bab kelar! Ngerokok di teras luar', 'Istirahat ngerokok di balkon'],
     strollBubbles: ['Wah nemu adegan seru!', 'Jalan goyang cari dialog'],
+    skinTone: '#f5cfa8',
+    skinShadow: '#dca474',
     shirtMain: '#2563eb',
-    shirtTrim: '#dbeafe',
+    shirtShadow: '#1d4ed8',
     pantsColor: '#334155',
     hairColor: '#7c2d12',
     cupColor: '#f59e0b',
@@ -114,8 +120,10 @@ const WORKER_PROFILES: WorkerProfile[] = [
     doneCoffeeBubbles: ['Audit beres! Ngopi susu dulu', 'Layout aman, santai ngopi'],
     doneSmokeBubbles: ['Audit selesai, ngerokok di teras', 'Beres! Ke teras smoking dulu'],
     strollBubbles: ['Jalan rapi cek ruangan', 'Pastikan semua tertib'],
+    skinTone: '#eab98d',
+    skinShadow: '#c78b5b',
     shirtMain: '#059669',
-    shirtTrim: '#d1fae5',
+    shirtShadow: '#047857',
     pantsColor: '#1f2937',
     hairColor: '#334155',
     cupColor: '#d97706',
@@ -135,10 +143,12 @@ const WORKER_PROFILES: WorkerProfile[] = [
     doneCoffeeBubbles: ['Cover beres! Sruput es kopi', 'Paket siap, minum dingin dulu'],
     doneSmokeBubbles: ['Kemas beres! Ngerokok di teras', 'Santai ngerokok di luar'],
     strollBubbles: ['Goyang santai cari gaya', 'Cuci mata lihat desain'],
+    skinTone: '#f7d5b5',
+    skinShadow: '#dfa97d',
     shirtMain: '#9333ea',
-    shirtTrim: '#f3e8ff',
+    shirtShadow: '#7e22ce',
     pantsColor: '#27272a',
-    hairColor: '#eab308',
+    hairColor: '#ca8a04',
     cupColor: '#38bdf8',
     styleType: 'creative',
     deskRatioX: 0.21,
@@ -156,8 +166,10 @@ const WORKER_PROFILES: WorkerProfile[] = [
     doneCoffeeBubbles: ['Upload beres! Minum dingin dulu', 'Terkirim! Nyemil santai dulu'],
     doneSmokeBubbles: ['Drive beres! Ngerokok di teras', 'Tugas tuntas, ngebul di luar'],
     strollBubbles: ['Halo! Siap kirim file', 'Jalan lincah keliling'],
+    skinTone: '#e6b184',
+    skinShadow: '#bd8152',
     shirtMain: '#d97706',
-    shirtTrim: '#fef3c7',
+    shirtShadow: '#b45309',
     pantsColor: '#1e293b',
     hairColor: '#111827',
     cupColor: '#60a5fa',
@@ -242,6 +254,7 @@ interface SimAgent {
   bubbleTimer: number;
   walkPhase: number;
   chillPhase: number;
+  lookDir: 1 | -1;
 }
 
 function roundRectPath(
@@ -288,6 +301,300 @@ function drawLushPlant(ctx: CanvasRenderingContext2D, x: number, y: number) {
   });
 }
 
+function drawHumanCharacter(
+  ctx: CanvasRenderingContext2D,
+  prof: WorkerProfile,
+  opts: {
+    px: number;
+    py: number;
+    moving: boolean;
+    isWorkerActive: boolean;
+    chillingCoffee: boolean;
+    chillingBalconySmoke: boolean;
+    atSpot: boolean;
+    walkPhase: number;
+    chillPhase: number;
+    lookDir: 1 | -1;
+    now: number;
+  }
+) {
+  const {
+    px,
+    py,
+    moving,
+    isWorkerActive,
+    chillingCoffee,
+    chillingBalconySmoke,
+    atSpot,
+    walkPhase,
+    chillPhase,
+    lookDir,
+    now
+  } = opts;
+
+  const stride = moving ? Math.sin(walkPhase) : 0;
+  const torsoTilt = moving ? stride * 0.07 : isWorkerActive ? 0.04 : 0;
+
+  // Bayangan kontak di lantai
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 20, 11.5, 3.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(torsoTilt);
+
+  // 1. Tungkai & sepatu berproporsi manusia
+  const leftLegSwing = moving ? stride * 6.5 : atSpot ? -1.5 : 0;
+  const rightLegSwing = moving ? -stride * 6.5 : atSpot ? 1.5 : 0;
+
+  ctx.strokeStyle = prof.pantsColor;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Kaki kiri
+  ctx.beginPath();
+  ctx.moveTo(-4, 7);
+  ctx.lineTo(-4.5 + leftLegSwing * 0.5, 13.5);
+  ctx.lineTo(-4.5 + leftLegSwing, 19);
+  ctx.stroke();
+
+  // Kaki kanan
+  ctx.beginPath();
+  ctx.moveTo(4, 7);
+  ctx.lineTo(4.5 + rightLegSwing * 0.5, 13.5);
+  ctx.lineTo(4.5 + rightLegSwing, 19);
+  ctx.stroke();
+
+  // Sepatu dengan sol
+  ctx.fillStyle = '#0f172a';
+  roundRectPath(ctx, -8.5 + leftLegSwing, 17.5, 7.5, 3.4, 1.5);
+  ctx.fill();
+  roundRectPath(ctx, 1 + rightLegSwing, 17.5, 7.5, 3.4, 1.5);
+  ctx.fill();
+
+  // 2. Torso / baju kemeja dengan bahu & gradasi
+  ctx.fillStyle = prof.shirtMain;
+  roundRectPath(ctx, -9.5, -7.5, 19, 15.5, 6);
+  ctx.fill();
+
+  // Shading sisi baju
+  ctx.fillStyle = prof.shirtShadow;
+  ctx.fillRect(4.5, -5.5, 4.5, 12);
+
+  // Kerah & kancing baju
+  ctx.strokeStyle = '#f8fafc';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-3, -7.5);
+  ctx.lineTo(0, -3);
+  ctx.lineTo(3, -7.5);
+  ctx.stroke();
+
+  // 3. Leher
+  ctx.fillStyle = prof.skinShadow;
+  ctx.fillRect(-3, -10.5, 6, 3.5);
+
+  // 4. Lengan ber-siku & tangan
+  const leftSwing = moving
+    ? -stride * 5.5
+    : isWorkerActive
+      ? Math.sin(now / 85) * 3
+      : chillingCoffee
+        ? Math.sin(chillPhase * 1.3) * 2
+        : 0;
+  const rightSwing = moving
+    ? stride * 5.5
+    : isWorkerActive
+      ? Math.cos(now / 85) * 3
+      : chillingCoffee
+        ? -2.5 + Math.sin(chillPhase * 1.4) * 2.5
+        : chillingBalconySmoke
+          ? -2 + Math.cos(chillPhase) * 1.2
+          : Math.sin(chillPhase) * 1.5;
+
+  // Lengan kiri
+  ctx.strokeStyle = prof.shirtMain;
+  ctx.lineWidth = 3.8;
+  ctx.beginPath();
+  ctx.moveTo(-9.5, -5);
+  ctx.lineTo(-12.5, 1.5 + leftSwing * 0.5);
+  ctx.lineTo(-10.5, 6.5 + leftSwing);
+  ctx.stroke();
+
+  // Tangan kiri
+  ctx.fillStyle = prof.skinTone;
+  ctx.beginPath();
+  ctx.arc(-10.5, 7 + leftSwing, 2.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lengan kanan
+  ctx.strokeStyle = prof.shirtMain;
+  ctx.lineWidth = 3.8;
+  ctx.beginPath();
+  ctx.moveTo(9.5, -5);
+  ctx.lineTo(12.5, 1.5 + rightSwing * 0.5);
+  ctx.lineTo(10.5, 6.5 + rightSwing);
+  ctx.stroke();
+
+  // Tangan kanan
+  ctx.fillStyle = prof.skinTone;
+  ctx.beginPath();
+  ctx.arc(10.5, 7 + rightSwing, 2.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Gelas minuman kesukaan + uap saat ngopi/ngeteh
+  if (chillingCoffee) {
+    const cupX = 11.5;
+    const cupY = 2.5 + rightSwing * 0.6;
+    ctx.fillStyle = prof.cupColor;
+    roundRectPath(ctx, cupX - 3.5, cupY - 4, 7.5, 7.5, 1.6);
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const steam = (chillPhase % 1) * 10;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(cupX, cupY - 6 - steam * 0.3);
+    ctx.quadraticCurveTo(cupX + 3, cupY - 9 - steam * 0.7, cupX - 1, cupY - 12 - steam);
+    ctx.stroke();
+  }
+
+  // Rokok & asap di teras smoking luar
+  if (chillingBalconySmoke) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(lookDir * 4, -15.5);
+    ctx.lineTo(lookDir * 10.5, -15.5);
+    ctx.stroke();
+
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(lookDir * 10, -16.4, 2.2, 1.8);
+
+    for (let p = 0; p < 3; p++) {
+      const prog = (chillPhase * 0.35 + p * 0.33) % 1;
+      const sx = lookDir * (12.5 + prog * 12);
+      const sy = -17.5 - prog * 18;
+      const sr = 2.2 + prog * 4;
+      ctx.fillStyle = `rgba(241, 245, 249, ${(1 - prog) * 0.76})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 5. Kepala manusia berproporsi halus + telinga + ekspresi wajah
+  const headNod = isWorkerActive ? Math.sin(now / 140) * 1.4 : 0;
+  ctx.save();
+  ctx.translate(0, headNod);
+
+  // Telinga kiri & kanan
+  ctx.fillStyle = prof.skinShadow;
+  ctx.beginPath();
+  ctx.ellipse(-8.5, -17.5, 2.2, 3.4, 0, 0, Math.PI * 2);
+  ctx.ellipse(8.5, -17.5, 2.2, 3.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wajah oval halus
+  ctx.fillStyle = prof.skinTone;
+  ctx.beginPath();
+  ctx.ellipse(0, -18, 8.4, 9.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = prof.skinShadow;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Rambut / gaya khas karakter
+  ctx.fillStyle = prof.hairColor;
+  if (prof.styleType === 'curly') {
+    ctx.beginPath();
+    ctx.arc(-6, -23.5, 4.5, 0, Math.PI * 2);
+    ctx.arc(-2, -26, 5, 0, Math.PI * 2);
+    ctx.arc(3, -25.5, 4.8, 0, Math.PI * 2);
+    ctx.arc(6.5, -23, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (prof.styleType === 'courier') {
+    // Topi kurir / cap
+    ctx.beginPath();
+    ctx.ellipse(0, -23.5, 8.8, 5, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(lookDir > 0 ? 0 : -11, -22.5, 11, 2.4);
+  } else if (prof.styleType === 'creative') {
+    // Rambut jambul kreatif
+    ctx.beginPath();
+    ctx.ellipse(0, -24.5, 8.8, 5.2, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(4, -27, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Rambut rapi / berponi
+    ctx.beginPath();
+    ctx.ellipse(0, -24, 8.7, 5, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-8.2, -23.5, 16.4, 3.5);
+  }
+
+  // Alis ekspresif
+  ctx.strokeStyle = prof.hairColor;
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(-5.2, -20.2);
+  ctx.lineTo(-1.8, isWorkerActive ? -20.8 : -19.8);
+  ctx.moveTo(1.8, isWorkerActive ? -20.8 : -19.8);
+  ctx.lineTo(5.2, -20.2);
+  ctx.stroke();
+
+  // Mata ber-iris & pupil
+  const eyeShiftX = moving ? lookDir * 1.1 : 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(-3.3 + eyeShiftX, -17.5, 2.1, 1.7, 0, 0, Math.PI * 2);
+  ctx.ellipse(3.3 + eyeShiftX, -17.5, 2.1, 1.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(-3.2 + eyeShiftX, -17.5, 1.15, 0, Math.PI * 2);
+  ctx.arc(3.2 + eyeShiftX, -17.5, 1.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Kacamata bingkai rapi untuk Riset Novel
+  if (prof.styleType === 'glasses') {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.15;
+    roundRectPath(ctx, -6.3 + eyeShiftX, -19.6, 5.4, 4.2, 1);
+    ctx.stroke();
+    roundRectPath(ctx, 0.9 + eyeShiftX, -19.6, 5.4, 4.2, 1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-0.9 + eyeShiftX, -17.6);
+    ctx.lineTo(0.9 + eyeShiftX, -17.6);
+    ctx.stroke();
+  }
+
+  // Mulut / senyum santai
+  ctx.strokeStyle = '#7c2d12';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  if (isWorkerActive) {
+    ctx.moveTo(-2, -13.5);
+    ctx.lineTo(2, -13.5);
+  } else {
+    ctx.arc(0, -14.3, 2.4, 0.15 * Math.PI, 0.85 * Math.PI);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.restore();
+}
+
 const LivingOfficeCanvas: React.FC<{
   isAnyWorking: boolean;
   isSlotDone: boolean;
@@ -322,19 +629,19 @@ const LivingOfficeCanvas: React.FC<{
     if (!ctx) return;
 
     const coffeeSpots = [
-      { rx: 0.65, ry: 0.42 },
-      { rx: 0.72, ry: 0.48 },
-      { rx: 0.65, ry: 0.54 },
-      { rx: 0.73, ry: 0.39 },
-      { rx: 0.68, ry: 0.62 }
+      { rx: 0.65, ry: 0.43 },
+      { rx: 0.72, ry: 0.49 },
+      { rx: 0.65, ry: 0.56 },
+      { rx: 0.73, ry: 0.4 },
+      { rx: 0.68, ry: 0.64 }
     ];
 
     const balconySpots = [
-      { rx: 0.83, ry: 0.38 },
-      { rx: 0.91, ry: 0.45 },
-      { rx: 0.84, ry: 0.58 },
-      { rx: 0.92, ry: 0.69 },
-      { rx: 0.85, ry: 0.82 }
+      { rx: 0.83, ry: 0.39 },
+      { rx: 0.91, ry: 0.46 },
+      { rx: 0.84, ry: 0.59 },
+      { rx: 0.92, ry: 0.7 },
+      { rx: 0.85, ry: 0.83 }
     ];
 
     const initialModes: RelaxModeType[] = ['coffee', 'balcony_smoke', 'stroll', 'coffee', 'balcony_smoke'];
@@ -350,7 +657,8 @@ const LivingOfficeCanvas: React.FC<{
       bubbleIdx: i,
       bubbleTimer: 0,
       walkPhase: i * 1.4,
-      chillPhase: i * 0.9
+      chillPhase: i * 0.9,
+      lookDir: i % 2 === 0 ? 1 : -1
     }));
 
     let rafId = 0;
@@ -388,7 +696,7 @@ const LivingOfficeCanvas: React.FC<{
       const parentWidth = canvas.parentElement?.clientWidth || 900;
       const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
       const logicalW = Math.max(420, parentWidth);
-      const logicalH = 400;
+      const logicalH = 405;
 
       if (canvas.width !== Math.round(logicalW * dpr) || canvas.height !== Math.round(logicalH * dpr)) {
         canvas.width = Math.round(logicalW * dpr);
@@ -398,7 +706,7 @@ const LivingOfficeCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // 1. Dinding atas kantor + aturan dilarang merokok di dalam
+      // 1. Dinding atas kantor + papan aturan dilarang merokok di dalam
       const wallGrad = ctx.createLinearGradient(0, 0, 0, logicalH * 0.25);
       wallGrad.addColorStop(0, '#cbd5e1');
       wallGrad.addColorStop(1, '#f1f5f9');
@@ -553,11 +861,6 @@ const LivingOfficeCanvas: React.FC<{
         ctx.fillRect(dx - 8, dy - 18, 16, 7);
       });
 
-      // 7. Tentukan status tiap pekerja:
-      // - 'working': sedang aktif di tahap berjalan
-      // - 'completed_relax': sudah selesai tugasnya -> kembali ngopi/ngeteh atau ngerokok di teras
-      // - 'waiting': belum gilirannya -> siaga di dekat meja
-      // - 'idle_free': tidak ada pekerjaan aktif -> bebas ngopi/ngeteh, jalan, atau ke teras
       type AgentRoleState = 'working' | 'completed_relax' | 'waiting' | 'idle_free';
 
       agents.forEach((ag, idx) => {
@@ -584,7 +887,6 @@ const LivingOfficeCanvas: React.FC<{
           goalY = prof.deskRatioY * logicalH + 23;
           ag.atSpot = false;
         } else {
-          // completed_relax atau idle_free: boleh ngopi/ngeteh atau ke teras smoking
           if (roleState === 'completed_relax' && ag.relaxMode === 'stroll') {
             ag.relaxMode = idx % 2 === 0 ? 'coffee' : 'balcony_smoke';
             const spot = pickRelaxSpot(idx, ag.relaxMode, logicalW, logicalH, now);
@@ -621,6 +923,7 @@ const LivingOfficeCanvas: React.FC<{
           ag.x += (dx / dist) * step;
           ag.y += (dy / dist) * step;
           ag.walkPhase += dt * 9.5;
+          if (Math.abs(dx) > 1.2) ag.lookDir = dx > 0 ? 1 : -1;
           moving = true;
           ag.atSpot = false;
         } else if (
@@ -658,159 +961,40 @@ const LivingOfficeCanvas: React.FC<{
         const chillingCoffee = isRelaxing && ag.relaxMode === 'coffee' && ag.atSpot;
         const chillingBalconySmoke = isRelaxing && ag.relaxMode === 'balcony_smoke' && ag.atSpot;
 
-        const waddleTilt = moving ? Math.sin(ag.walkPhase) * 0.08 : 0;
         const bounceY = moving
-          ? Math.abs(Math.sin(ag.walkPhase)) * -3.5
+          ? Math.abs(Math.sin(ag.walkPhase)) * -3
           : isWorkerActive
-            ? Math.sin(now / 120) * -2
+            ? Math.sin(now / 120) * -1.5
             : chillingCoffee || chillingBalconySmoke
-              ? Math.sin(ag.chillPhase) * -1.4
+              ? Math.sin(ag.chillPhase) * -1.2
               : 0;
 
         const px = ag.x;
         const py = ag.y + bounceY;
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
-        ctx.beginPath();
-        ctx.ellipse(ag.x, ag.y + 17, 10.5, 3.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(waddleTilt);
-
-        const legSwing = moving ? Math.sin(ag.walkPhase) * 5 : 0;
-        ctx.strokeStyle = prof.pantsColor;
-        ctx.lineWidth = 3.2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        if (ag.atSpot) {
-          ctx.moveTo(-4, 7);
-          ctx.lineTo(-6, 13);
-          ctx.moveTo(4, 7);
-          ctx.lineTo(6, 13);
-        } else {
-          ctx.moveTo(-4, 7);
-          ctx.lineTo(-4 + legSwing, 16);
-          ctx.moveTo(4, 7);
-          ctx.lineTo(4 - legSwing, 16);
-        }
-        ctx.stroke();
-
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-7.5 + (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
-        ctx.fillRect(2.5 - (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
-
-        ctx.fillStyle = prof.shirtMain;
-        roundRectPath(ctx, -8.5, -6, 17, 13.5, 4.5);
-        ctx.fill();
-        ctx.fillStyle = prof.shirtTrim;
-        ctx.fillRect(-3, -6, 6, 3);
-
-        const armWave = moving
-          ? -legSwing * 0.75
-          : isWorkerActive
-            ? Math.cos(now / 95) * 3.5
-            : chillingCoffee
-              ? Math.sin(ag.chillPhase * 1.4) * 2.5
-              : Math.sin(ag.chillPhase) * 1.6;
-
-        ctx.strokeStyle = '#fcd34d';
-        ctx.lineWidth = 2.6;
-        ctx.beginPath();
-        ctx.moveTo(-8.5, -2);
-        ctx.lineTo(-12.5, 4 + armWave);
-        ctx.moveTo(8.5, -2);
-        ctx.lineTo(12.5, 4 - armWave);
-        ctx.stroke();
-
-        if (chillingCoffee) {
-          ctx.fillStyle = prof.cupColor;
-          roundRectPath(ctx, 10, -1 + armWave * 0.4, 7.5, 6.5, 1.5);
-          ctx.fill();
-          ctx.strokeStyle = '#475569';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-
-          const steam = (ag.chillPhase % 1) * 9;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(13.8, -3 - steam * 0.35);
-          ctx.quadraticCurveTo(16.5, -6 - steam * 0.7, 13.5, -9 - steam);
-          ctx.stroke();
-        }
-
-        if (chillingBalconySmoke) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2.2;
-          ctx.beginPath();
-          ctx.moveTo(5, -11);
-          ctx.lineTo(11, -11);
-          ctx.stroke();
-
-          ctx.fillStyle = '#f97316';
-          ctx.fillRect(10.5, -11.8, 2, 1.6);
-
-          for (let p = 0; p < 3; p++) {
-            const prog = (ag.chillPhase * 0.35 + p * 0.33) % 1;
-            const sx = 13 + prog * 13;
-            const sy = -13 - prog * 18;
-            const sr = 2.2 + prog * 4;
-            ctx.fillStyle = `rgba(241, 245, 249, ${(1 - prog) * 0.75})`;
-            ctx.beginPath();
-            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
-        ctx.fillStyle = '#fde68a';
-        roundRectPath(ctx, -7.8, -21, 15.6, 15, 5.2);
-        ctx.fill();
-        ctx.strokeStyle = '#d97706';
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-
-        ctx.fillStyle = prof.hairColor;
-        if (prof.styleType === 'curly') {
-          ctx.beginPath();
-          ctx.arc(-5, -20, 4.5, 0, Math.PI * 2);
-          ctx.arc(0, -22, 5, 0, Math.PI * 2);
-          ctx.arc(5, -20, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (prof.styleType === 'courier') {
-          roundRectPath(ctx, -8.5, -23.5, 17, 5.5, 2.5);
-          ctx.fill();
-          ctx.fillRect(-10, -19.5, 20, 2);
-        } else {
-          roundRectPath(ctx, -8, -22.5, 16, 5.5, 2.8);
-          ctx.fill();
-        }
-
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(-3.2, -13.5, 1.4, 0, Math.PI * 2);
-        ctx.arc(3.2, -13.5, 1.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (prof.styleType === 'glasses') {
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 1.1;
-          ctx.strokeRect(-6.2, -15.5, 5, 4);
-          ctx.strokeRect(1.2, -15.5, 5, 4);
-        }
-
-        ctx.restore();
+        drawHumanCharacter(ctx, prof, {
+          px,
+          py,
+          moving,
+          isWorkerActive,
+          chillingCoffee,
+          chillingBalconySmoke,
+          atSpot: ag.atSpot,
+          walkPhase: ag.walkPhase,
+          chillPhase: ag.chillPhase,
+          lookDir: ag.lookDir,
+          now
+        });
 
         ctx.font = 'bold 9.2px sans-serif';
         ctx.textAlign = 'center';
         const tagText = prof.roleTitle;
         const tagW = ctx.measureText(tagText).width + 10;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        roundRectPath(ctx, px - tagW / 2, py + 19, tagW, 13, 6.5);
+        roundRectPath(ctx, px - tagW / 2, py + 22, tagW, 13, 6.5);
         ctx.fill();
         ctx.fillStyle = '#0f172a';
-        ctx.fillText(tagText, px, py + 28.5);
+        ctx.fillText(tagText, px, py + 31.5);
 
         let bubbleText = prof.strollBubbles[ag.bubbleIdx % prof.strollBubbles.length];
         if (isWorkerActive) {
@@ -834,7 +1018,7 @@ const LivingOfficeCanvas: React.FC<{
         const textW = Math.min(176, ctx.measureText(bubbleText).width + 14);
         const bh = 18;
         let bx = Math.max(6, Math.min(logicalW - textW - 6, px - textW / 2));
-        let by = Math.max(36, py - 44);
+        let by = Math.max(36, py - 48);
 
         for (let attempt = 0; attempt < 5; attempt++) {
           const overlaps = placedBubbles.some(
@@ -873,7 +1057,7 @@ const LivingOfficeCanvas: React.FC<{
       ref={canvasRef}
       style={{
         width: '100%',
-        height: 400,
+        height: 405,
         display: 'block',
         borderRadius: 12,
         border: '1px solid #cbd5e1',
