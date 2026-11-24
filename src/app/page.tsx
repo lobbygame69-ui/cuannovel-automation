@@ -35,11 +35,13 @@ interface StatusPayload {
   queue?: QueueRow[];
 }
 
+const WORKER_BEARER_TOKEN = `Bearer ${process.env.NEXT_PUBLIC_WORKER_SECRET || 'cuannovel99@'}`;
+
 export default function CuanNovelMonitorPage() {
   const [data, setData] = useState<StatusPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [deletingSlot, setDeletingSlot] = useState<number | null>(null);
-  const [deletedSlotNos, setDeletedSlotNos] = useState<number[]>([]);
+  const [deletedSlotKeys, setDeletedSlotKeys] = useState<string[]>([]);
   const [runningSlotNo, setRunningSlotNo] = useState<number | null>(null);
   const [workerMsg, setWorkerMsg] = useState('');
   const [autoRun, setAutoRun] = useState(false);
@@ -53,6 +55,18 @@ export default function CuanNovelMonitorPage() {
   const busyRef = useRef(false);
   const workerAbortRef = useRef<AbortController | null>(null);
   const sessionTokenRef = useRef(0);
+
+  const isRowDeleted = useCallback(
+    (row: { id?: string; sequence_no: number }) => {
+      const keyById = row.id ? `id:${row.id}` : '';
+      const keyBySlot = `slot:${row.sequence_no}`;
+      return (
+        (keyById && deletedSlotKeys.includes(keyById)) ||
+        deletedSlotKeys.includes(keyBySlot)
+      );
+    },
+    [deletedSlotKeys]
+  );
 
   const refreshStatus = useCallback(async (): Promise<StatusPayload> => {
     try {
@@ -82,7 +96,7 @@ export default function CuanNovelMonitorPage() {
     busyRef.current = false;
     setLoading(false);
     setRunningSlotNo(null);
-    setWorkerMsg('Auto-Run dihentikan. Worker lokal dibatalkan.');
+    setWorkerMsg('Auto-Run dihentikan. Worker lokal dan animasi dihentikan.');
   }, []);
 
   const handleDeleteItem = useCallback(
@@ -94,7 +108,7 @@ export default function CuanNovelMonitorPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer cuannovel99@'
+            Authorization: WORKER_BEARER_TOKEN
           },
           body: JSON.stringify({
             action: 'delete_slot',
@@ -107,7 +121,13 @@ export default function CuanNovelMonitorPage() {
         setWorkerMsg(`Hapus Slot #${item.slot} -> HTTP ${res.status}: ${text}`);
 
         if (res.ok) {
-          setDeletedSlotNos((prev) => (prev.includes(item.slot) ? prev : [...prev, item.slot]));
+          setDeletedSlotKeys((prev) => {
+            const next = new Set(prev);
+            if (item.id) next.add(`id:${item.id}`);
+            next.add(`slot:${item.slot}`);
+            return Array.from(next);
+          });
+
           setData((prev) => {
             if (!prev?.queue) return prev;
             return {
@@ -142,9 +162,7 @@ export default function CuanNovelMonitorPage() {
         return { finishedNovel: true, needsRetry: false, delayMs: 0 };
       }
 
-      const queue = (currentData?.queue || []).filter(
-        (r) => !deletedSlotNos.includes(r.sequence_no)
-      );
+      const queue = (currentData?.queue || []).filter((r) => !isRowDeleted(r));
       const activeSlot =
         queue.find((r) => r.current_chapter < r.target_chapters) ||
         queue.find((r) => r.stage === 'novelku_production') ||
@@ -185,7 +203,7 @@ export default function CuanNovelMonitorPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer cuannovel99@'
+            Authorization: WORKER_BEARER_TOKEN
           },
           body: JSON.stringify({
             slot: activeSlot.sequence_no,
@@ -261,7 +279,7 @@ export default function CuanNovelMonitorPage() {
         setRunningSlotNo(null);
       }
     },
-    [deletedSlotNos, refreshStatus, retryCount]
+    [isRowDeleted, refreshStatus, retryCount]
   );
 
   const triggerWorkerOnce = useCallback(async () => {
@@ -334,7 +352,7 @@ export default function CuanNovelMonitorPage() {
     : `STATUS: OTOMATIS MENGULANG — ${data?.latestError || data?.error || 'Menyesuaikan hasil bab'}`;
 
   const mappedSlots: PipelineSlotState[] = (data?.queue || [])
-    .filter((row) => !deletedSlotNos.includes(row.sequence_no))
+    .filter((row) => !isRowDeleted(row))
     .map((row) => ({
       id: row.id,
       slot: row.sequence_no,
@@ -347,7 +365,7 @@ export default function CuanNovelMonitorPage() {
       provider: lastProviderBySlot[row.sequence_no],
       driveUrl: row.drive_folder_url || undefined,
       error: row.last_error,
-      isRunning: runningSlotNo === row.sequence_no
+      isRunning: autoRun && runningSlotNo === row.sequence_no
     }));
 
   const batchId = data?.batch?.id || '-';
