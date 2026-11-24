@@ -27,6 +27,8 @@ interface OfficePipelineBoardProps {
   onRefresh: () => void;
   onRunOneStep: () => void;
   onDeleteItem?: (slot: PipelineSlotState) => void;
+  onJumpToPackaging?: (slot: PipelineSlotState) => void;
+  onClearLog?: () => void;
   autoRun: boolean;
   onToggleAutoRun: () => void;
   busy?: boolean;
@@ -37,7 +39,7 @@ const PIPELINE_STAGES = [
   { key: 'scout_research', label: '1. Riset', shortTitle: 'Riset Proyek' },
   { key: 'novelku_production', label: '2. Tulis Bab', shortTitle: 'Tulis Bab' },
   { key: 'formatting_kdp', label: '3. Audit & Rapikan', shortTitle: 'Audit & Rapikan' },
-  { key: 'packaging_zip', label: '4. Kemas Paket', shortTitle: 'Kemas Paket' },
+  { key: 'cover_generation', label: '4. Cover & Kemas', shortTitle: 'Cover & Kemas Paket' },
   { key: 'gdrive_upload', label: '5. Google Drive', shortTitle: 'Google Drive' }
 ];
 
@@ -46,16 +48,10 @@ function getStageIndex(stage: string, chaptersDone: number, totalChapters: numbe
   if (s.includes('drive') || s.includes('upload') || s.includes('done') || s.includes('completed')) {
     return 4;
   }
-  if (s.includes('pack') || s.includes('zip') || s.includes('export')) {
+  if (s.includes('pack') || s.includes('zip') || s.includes('export') || s.includes('cover')) {
     return 3;
   }
-  if (
-    s.includes('audit') ||
-    s.includes('format') ||
-    s.includes('edit') ||
-    s.includes('kdp') ||
-    s.includes('cover')
-  ) {
+  if (s.includes('audit') || s.includes('format') || s.includes('edit') || s.includes('kdp')) {
     return 2;
   }
   if (
@@ -96,6 +92,7 @@ function pickSingleActiveSlot(slots: PipelineSlotState[]): PipelineSlotState | n
         st.includes('production') ||
         st.includes('audit') ||
         st.includes('pack') ||
+        st.includes('cover') ||
         st.includes('drive'))
     );
   });
@@ -117,78 +114,114 @@ const SingleStationSvg: React.FC<{
 
   if (stationIndex === 0) {
     return (
-      <svg width="76" height="52" viewBox="0 0 76 52" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="6" y="10" width="34" height="24" rx="3" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.8" />
-        <line x1="11" y1="17" x2="33" y2="17" stroke="#64748b" strokeWidth="2" />
-        <line x1="11" y1="23" x2="35" y2="23" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="11" y1="29" x2="25" y2="29" stroke="#0284c7" strokeWidth="2" />
-        <g className="st-anim-riset">
-          <circle cx="50" cy="22" r="8.5" fill="#e0f2fe" stroke="#0284c7" strokeWidth="2.5" />
-          <line x1="56" y1="28" x2="64" y2="36" stroke="#0284c7" strokeWidth="3" strokeLinecap="round" />
+      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
+        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
+        <rect x="12" y="15" width="32" height="22" rx="3" fill="#0f172a" stroke="#475569" strokeWidth="1.8" />
+        <rect x="14.5" y="17.5" width="27" height="16" rx="1.5" fill="#38bdf8" className="st-anim-screen" />
+        <line x1="17.5" y1="21.5" x2="34" y2="21.5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="17.5" y1="25.5" x2="38" y2="25.5" stroke="#e0f2fe" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="17.5" y1="29.5" x2="29" y2="29.5" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+        <rect x="25" y="37" width="6" height="12" fill="#64748b" />
+        <rect x="16" y="45" width="18" height="3.5" rx="1.5" fill="#94a3b8" />
+
+        <g className="st-anim-riset-body">
+          <circle cx="56" cy="18" r="6.2" fill="#fbbf24" />
+          <path d="M50 16.5 C50 11.5, 62 11.5, 62 16.5 Z" fill="#1e293b" />
+          <path d="M46 49 C46 31, 66 31, 66 49 Z" fill="#0284c7" />
+          <path d="M49 34 L36 44" stroke="#fbbf24" strokeWidth="3.2" strokeLinecap="round" className="st-anim-ketik-l" />
+          <path d="M58 34 L42 45" stroke="#fbbf24" strokeWidth="3.2" strokeLinecap="round" className="st-anim-ketik-r" />
         </g>
-        <rect x="4" y="42" width="68" height="4" rx="2" fill="#334155" />
+
+        <g className="st-anim-lup">
+          <circle cx="72" cy="24" r="7.5" fill="#e0f2fe" fillOpacity="0.85" stroke="#0369a1" strokeWidth="2.4" />
+          <line x1="77.5" y1="29.5" x2="84" y2="36" stroke="#0369a1" strokeWidth="3" strokeLinecap="round" />
+        </g>
       </svg>
     );
   }
 
   if (stationIndex === 1) {
     return (
-      <svg width="76" height="52" viewBox="0 0 76 52" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="8" y="11" width="26" height="19" rx="2.5" fill="#0f172a" />
+      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
+        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
+        <rect x="11" y="13" width="32" height="23" rx="3" fill="#0f172a" />
         <rect
-          x="10.5"
-          y="13.5"
-          width="21"
-          height="14"
-          rx="1"
+          x="13.5"
+          y="15.5"
+          width="27"
+          height="17"
+          rx="1.5"
           fill={active && isError ? '#ef4444' : active ? '#10b981' : '#64748b'}
           className="st-anim-screen"
         />
-        <rect x="19" y="30" width="4" height="12" fill="#64748b" />
+        <rect x="24" y="36" width="6" height="13" fill="#64748b" />
+        <rect x="15" y="45" width="18" height="3.5" rx="1.5" fill="#94a3b8" />
+
         <g className="st-anim-tulis">
-          <circle cx="48" cy="15" r="5" fill="#f59e0b" />
-          <path d="M40 42 C40 27, 56 27, 56 42 Z" fill="#2563eb" />
-          <circle cx="39" cy="34" r="2.2" fill="#fbbf24" className="st-anim-tangan" />
+          <circle cx="56" cy="17" r="6" fill="#f59e0b" />
+          <path d="M46 49 C46 31, 66 31, 66 49 Z" fill="#2563eb" />
+          <circle cx="44" cy="40" r="3" fill="#fde68a" className="st-anim-tangan" />
         </g>
-        <rect x="4" y="42" width="68" height="4" rx="2" fill="#334155" />
+
+        <g className="st-anim-kertas">
+          <rect x="69" y="14" width="15" height="20" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.6" />
+          <line x1="72" y1="19" x2="81" y2="19" stroke="#475569" strokeWidth="1.6" />
+          <line x1="72" y1="24" x2="81" y2="24" stroke="#475569" strokeWidth="1.6" />
+          <line x1="72" y1="29" x2="78" y2="29" stroke="#10b981" strokeWidth="2" />
+        </g>
       </svg>
     );
   }
 
   if (stationIndex === 2) {
     return (
-      <svg width="76" height="52" viewBox="0 0 76 52" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="10" y="10" width="32" height="26" rx="3" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.8" />
-        <line x1="15" y1="17" x2="36" y2="17" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="15" y1="23" x2="36" y2="23" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="15" y1="29" x2="29" y2="29" stroke="#94a3b8" strokeWidth="2" />
+      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
+        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
+        <rect x="14" y="11" width="36" height="32" rx="3.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="2" />
+        <line x1="20" y1="19" x2="43" y2="19" stroke="#64748b" strokeWidth="2" />
+        <line x1="20" y1="26" x2="43" y2="26" stroke="#64748b" strokeWidth="2" />
+        <line x1="20" y1="33" x2="35" y2="33" stroke="#94a3b8" strokeWidth="2" />
+
         <g className="st-anim-audit">
-          <circle cx="56" cy="24" r="10" fill="#dcfce7" stroke="#16a34a" strokeWidth="2.2" />
-          <path d="M51 24 L54.5 27.5 L61.5 20" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" />
+          <circle cx="65" cy="29" r="12.5" fill="#dcfce7" stroke="#16a34a" strokeWidth="2.5" />
+          <path
+            d="M59 29 L63.5 33.5 L72 24"
+            fill="none"
+            stroke="#16a34a"
+            strokeWidth="2.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </g>
-        <rect x="4" y="42" width="68" height="4" rx="2" fill="#334155" />
       </svg>
     );
   }
 
   if (stationIndex === 3) {
     return (
-      <svg width="76" height="52" viewBox="0 0 76 52" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="10" y="12" width="14" height="18" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" className="st-anim-kemas" />
-        <rect x="34" y="18" width="28" height="24" rx="3" fill="#f59e0b" stroke="#b45309" strokeWidth="1.8" />
-        <line x1="48" y1="18" x2="48" y2="42" stroke="#fef3c7" strokeWidth="2" />
-        <rect x="4" y="42" width="68" height="4" rx="2" fill="#334155" />
+      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
+        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
+        <g className="st-anim-kemas">
+          <rect x="12" y="12" width="18" height="23" rx="2" fill="#1e293b" stroke="#fbbf24" strokeWidth="1.6" />
+          <circle cx="21" cy="22" r="4" fill="#fbbf24" opacity="0.85" />
+          <line x1="15" y1="30" x2="27" y2="30" stroke="#f8fafc" strokeWidth="1.6" />
+        </g>
+        <rect x="44" y="21" width="32" height="28" rx="3.5" fill="#f59e0b" stroke="#b45309" strokeWidth="2" />
+        <path d="M44 21 L50 15 H70 L76 21" fill="#fbbf24" stroke="#b45309" strokeWidth="1.8" />
+        <line x1="60" y1="15" x2="60" y2="49" stroke="#fef3c7" strokeWidth="2.2" />
       </svg>
     );
   }
 
   return (
-    <svg width="76" height="52" viewBox="0 0 76 52" className={`st-svg ${stateCls}`} aria-hidden="true">
+    <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
+      <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
       <g className="st-anim-drive">
-        <rect x="8" y="21" width="18" height="13" rx="2" fill="#2563eb" />
+        <rect x="11" y="23" width="21" height="15" rx="2.5" fill="#2563eb" />
+        <path d="M16 30.5 H27 M23 27 L27 30.5 L23 34" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </g>
-      <path d="M38 14 H49 L52 18 H68 V38 H38 Z" fill="#16a34a" />
-      <rect x="4" y="42" width="68" height="4" rx="2" fill="#334155" />
+      <path d="M46 15 H59 L63 20 H81 V45 H46 Z" fill="#16a34a" stroke="#15803d" strokeWidth="1.6" />
+      <rect x="51" y="25" width="25" height="15" rx="2" fill="#dcfce7" opacity="0.9" />
     </svg>
   );
 };
@@ -202,17 +235,29 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   onRefresh,
   onRunOneStep,
   onDeleteItem,
+  onJumpToPackaging,
+  onClearLog,
   autoRun,
   onToggleAutoRun,
   busy = false,
   deletingSlot = null
 }) => {
   const [fileTab, setFileTab] = useState<'unfinished' | 'finished'>('unfinished');
+  const [copiedBatch, setCopiedBatch] = useState(false);
 
   const activeSlot = pickSingleActiveSlot(slots);
   const finishedFiles = slots.filter((s) => isSlotFinished(s));
   const unfinishedFiles = slots.filter((s) => !isSlotFinished(s));
   const visibleFiles = fileTab === 'finished' ? finishedFiles : unfinishedFiles;
+
+  const handleCopyBatchId = () => {
+    if (!batchId || batchId === '-') return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(batchId);
+      setCopiedBatch(true);
+      setTimeout(() => setCopiedBatch(false), 1800);
+    }
+  };
 
   return (
     <div className="cn-wrap">
@@ -265,6 +310,10 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
         }
         .cn-btn:hover:not(:disabled) {
           background: #f1f5f9;
@@ -278,10 +327,23 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           border-color: #059669;
           color: #ffffff;
         }
+        .cn-btn-green:hover:not(:disabled) {
+          background: #047857;
+        }
         .cn-btn-amber {
           background: #d97706;
           border-color: #d97706;
           color: #ffffff;
+        }
+        .cn-btn-blue {
+          background: #eff6ff;
+          border-color: #93c5fd;
+          color: #1d4ed8;
+          padding: 6px 10px;
+          font-size: 12px;
+        }
+        .cn-btn-blue:hover:not(:disabled) {
+          background: #dbeafe;
         }
         .cn-btn-danger {
           background: #fee2e2;
@@ -294,7 +356,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #fecaca;
         }
 
-        /* 5 Kotak Stasiun Terpisah */
         .cn-stations-grid {
           display: grid;
           grid-template-columns: repeat(5, minmax(130px, 1fr));
@@ -312,7 +373,8 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           border-radius: 10px;
           padding: 10px;
           text-align: center;
-          opacity: 0.65;
+          opacity: 0.68;
+          transition: transform 0.2s ease, border-color 0.2s ease;
         }
         .cn-station-box.is-done {
           border-color: #86efac;
@@ -324,12 +386,14 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
           background: #eff6ff;
           opacity: 1;
+          transform: translateY(-2px);
         }
         .cn-station-box.is-current.is-stopped {
           border-color: #94a3b8;
           box-shadow: none;
           background: #f1f5f9;
           opacity: 0.92;
+          transform: none;
         }
         .cn-station-box.is-current.is-err {
           border-color: #ef4444;
@@ -337,22 +401,19 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #fef2f2;
         }
         .cn-station-label {
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: 700;
           margin-top: 4px;
           color: #0f172a;
         }
         .cn-station-state {
           font-size: 10px;
-          font-weight: 700;
+          font-weight: 800;
           margin-top: 2px;
           color: #475569;
-        }
-        .cn-station-box.is-current.is-stopped .cn-station-state {
-          color: #475569;
+          letter-spacing: 0.3px;
         }
 
-        /* Kartu 1 Novel Aktif */
         .cn-active-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -369,6 +430,12 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
+        }
+        .cn-action-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          align-items: center;
         }
         .cn-pill {
           display: inline-block;
@@ -408,7 +475,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #ef4444;
         }
 
-        /* Panel File Sudah Jadi & Belum Jadi */
         .cn-files-box {
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -419,6 +485,13 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           display: flex;
           gap: 8px;
           margin-bottom: 12px;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .cn-tab-group {
+          display: flex;
+          gap: 8px;
         }
         .cn-tab {
           padding: 7px 12px;
@@ -457,41 +530,62 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           margin-top: 2px;
         }
 
-        @keyframes animRiset {
-          0%, 100% { transform: translate(0px, 0px); }
-          50% { transform: translate(-12px, 3px); }
+        @keyframes animRisetBody {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-2px) rotate(-1.5deg); }
         }
-        @keyframes animTulis {
+        @keyframes animKetikL {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-2.5px); }
         }
+        @keyframes animKetikR {
+          0%, 100% { transform: translateY(-2.5px); }
+          50% { transform: translateY(0px); }
+        }
+        @keyframes animLup {
+          0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+          35% { transform: translate(-10px, 2px) rotate(-6deg); }
+          70% { transform: translate(-4px, -3px) rotate(5deg); }
+        }
+        @keyframes animTulis {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-3px); }
+        }
         @keyframes animTangan {
           0%, 100% { transform: translate(0px, 0px); }
-          50% { transform: translate(-2px, 2px); }
+          50% { transform: translate(-2.5px, 2px); }
+        }
+        @keyframes animKertas {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-3.5px); }
         }
         @keyframes animAudit {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(3px); }
+          0%, 100% { transform: scale(1) translateY(0px); }
+          50% { transform: scale(1.08) translateY(-2px); }
         }
         @keyframes animKemas {
           0%, 100% { transform: translate(0px, 0px); }
-          50% { transform: translate(11px, 4px); }
+          50% { transform: translate(14px, 6px) scale(0.92); }
         }
         @keyframes animDrive {
           0%, 100% { transform: translateX(0px); }
-          50% { transform: translateX(10px); }
+          50% { transform: translateX(11px); }
         }
         @keyframes animBlink {
-          0%, 100% { opacity: 0.7; }
+          0%, 100% { opacity: 0.72; }
           50% { opacity: 1; }
         }
 
-        .st-svg.is-live .st-anim-riset { animation: animRiset 1.3s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-riset-body { animation: animRisetBody 1.1s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-ketik-l { animation: animKetikL 0.28s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-ketik-r { animation: animKetikR 0.28s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-lup { animation: animLup 1.8s ease-in-out infinite; }
         .st-svg.is-live .st-anim-tulis { animation: animTulis 0.55s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-tangan { animation: animTangan 0.3s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-screen { animation: animBlink 0.8s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-audit { animation: animAudit 1.1s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-kemas { animation: animKemas 1.2s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-tangan { animation: animTangan 0.26s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-kertas { animation: animKertas 1.2s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-screen { animation: animBlink 0.75s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-audit { animation: animAudit 1.15s ease-in-out infinite; }
+        .st-svg.is-live .st-anim-kemas { animation: animKemas 1.3s ease-in-out infinite; }
         .st-svg.is-live .st-anim-drive { animation: animDrive 1.1s ease-in-out infinite; }
 
         .st-svg.is-rest * {
@@ -511,6 +605,9 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         <div className="cn-btns">
           <button type="button" onClick={onRefresh} disabled={busy} className="cn-btn">
             Refresh Status
+          </button>
+          <button type="button" onClick={handleCopyBatchId} disabled={batchId === '-'} className="cn-btn">
+            {copiedBatch ? 'Batch ID Tersalin' : 'Salin Batch ID'}
           </button>
           <button type="button" onClick={onRunOneStep} disabled={busy} className="cn-btn cn-btn-green">
             {busy ? 'Worker Bekerja...' : 'Jalankan 1 Langkah Worker'}
@@ -534,7 +631,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
 
         return (
           <>
-            {/* 5 Stasiun Animasi Terpisah */}
             <div className="cn-stations-grid">
               {PIPELINE_STAGES.map((st, idx) => {
                 const isDone = idx < activeStageIdx;
@@ -571,7 +667,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
               })}
             </div>
 
-            {/* Ringkasan 1 Novel yang Sedang Dikerjakan */}
             <div className={`cn-active-card ${isErr ? 'is-err' : ''}`}>
               <div className="cn-row-between">
                 <div>
@@ -584,16 +679,38 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                   </span>
                 </div>
 
-                {onDeleteItem && (
-                  <button
-                    type="button"
-                    disabled={busy || deletingSlot === activeSlot.slot}
-                    onClick={() => onDeleteItem(activeSlot)}
-                    className="cn-btn cn-btn-danger"
-                  >
-                    {deletingSlot === activeSlot.slot ? 'Menghapus...' : 'Hapus Novel Aktif'}
-                  </button>
-                )}
+                <div className="cn-action-group">
+                  {onJumpToPackaging && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onJumpToPackaging(activeSlot)}
+                      className="cn-btn cn-btn-blue"
+                    >
+                      Kemas &amp; Upload Sekarang
+                    </button>
+                  )}
+                  {activeSlot.driveUrl && (
+                    <a
+                      href={activeSlot.driveUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cn-btn cn-btn-blue"
+                    >
+                      Buka Drive
+                    </a>
+                  )}
+                  {onDeleteItem && (
+                    <button
+                      type="button"
+                      disabled={busy || deletingSlot === activeSlot.slot}
+                      onClick={() => onDeleteItem(activeSlot)}
+                      className="cn-btn cn-btn-danger"
+                    >
+                      {deletingSlot === activeSlot.slot ? 'Menghapus...' : 'Hapus Novel Aktif'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ marginTop: 8, fontSize: 12.5, color: '#334155' }}>
@@ -620,23 +737,30 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         );
       })()}
 
-      {/* Daftar Pilihan File: Sudah Jadi vs Belum Jadi + Tombol Hapus */}
       <div className="cn-files-box">
         <div className="cn-tabs">
-          <button
-            type="button"
-            onClick={() => setFileTab('unfinished')}
-            className={`cn-tab ${fileTab === 'unfinished' ? 'active' : ''}`}
-          >
-            Belum Jadi ({unfinishedFiles.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFileTab('finished')}
-            className={`cn-tab ${fileTab === 'finished' ? 'active' : ''}`}
-          >
-            Sudah Jadi ({finishedFiles.length})
-          </button>
+          <div className="cn-tab-group">
+            <button
+              type="button"
+              onClick={() => setFileTab('unfinished')}
+              className={`cn-tab ${fileTab === 'unfinished' ? 'active' : ''}`}
+            >
+              Belum Jadi ({unfinishedFiles.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFileTab('finished')}
+              className={`cn-tab ${fileTab === 'finished' ? 'active' : ''}`}
+            >
+              Sudah Jadi ({finishedFiles.length})
+            </button>
+          </div>
+
+          {onClearLog && (
+            <button type="button" onClick={onClearLog} className="cn-btn" style={{ padding: '5px 10px', fontSize: 12 }}>
+              Bersihkan Log
+            </button>
+          )}
         </div>
 
         {visibleFiles.length === 0 ? (
@@ -666,16 +790,28 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                 </div>
               </div>
 
-              {onDeleteItem && (
-                <button
-                  type="button"
-                  disabled={busy || deletingSlot === item.slot}
-                  onClick={() => onDeleteItem(item)}
-                  className="cn-btn cn-btn-danger"
-                >
-                  {deletingSlot === item.slot ? 'Menghapus...' : 'Hapus'}
-                </button>
-              )}
+              <div className="cn-action-group">
+                {onJumpToPackaging && !isSlotFinished(item) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onJumpToPackaging(item)}
+                    className="cn-btn cn-btn-blue"
+                  >
+                    Kemas
+                  </button>
+                )}
+                {onDeleteItem && (
+                  <button
+                    type="button"
+                    disabled={busy || deletingSlot === item.slot}
+                    onClick={() => onDeleteItem(item)}
+                    className="cn-btn cn-btn-danger"
+                  >
+                    {deletingSlot === item.slot ? 'Menghapus...' : 'Hapus'}
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
