@@ -6,6 +6,8 @@ import { extractShortChapterInfo } from '../lib/cuannovel';
 
 interface QueueRow {
   id: string;
+  project_id?: string | null;
+  title?: string | null;
   sequence_no: number;
   stage: string;
   current_chapter: number;
@@ -36,6 +38,7 @@ interface StatusPayload {
 export default function CuanNovelMonitorPage() {
   const [data, setData] = useState<StatusPayload | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deletingSlot, setDeletingSlot] = useState<number | null>(null);
   const [runningSlotNo, setRunningSlotNo] = useState<number | null>(null);
   const [workerMsg, setWorkerMsg] = useState('');
   const [autoRun, setAutoRun] = useState(true);
@@ -64,6 +67,35 @@ export default function CuanNovelMonitorPage() {
       return fallback;
     }
   }, []);
+
+  const handleDeleteItem = useCallback(
+    async (item: PipelineSlotState) => {
+      setDeletingSlot(item.slot);
+      setWorkerMsg(`Menghapus data Slot #${item.slot}...`);
+      try {
+        const res = await fetch('/api/worker', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer cuannovel99@'
+          },
+          body: JSON.stringify({
+            action: 'delete_slot',
+            slot: item.slot,
+            projectId: item.projectId || null
+          })
+        });
+        const text = await res.text();
+        setWorkerMsg(`Hapus Slot #${item.slot} -> HTTP ${res.status}: ${text}`);
+        await refreshStatus();
+      } catch (err) {
+        setWorkerMsg(err instanceof Error ? err.message : 'Gagal menghapus item');
+      } finally {
+        setDeletingSlot(null);
+      }
+    },
+    [refreshStatus]
+  );
 
   const runSingleWorkerStep = useCallback(
     async (currentData: StatusPayload | null): Promise<{
@@ -232,6 +264,8 @@ export default function CuanNovelMonitorPage() {
 
   const mappedSlots: PipelineSlotState[] = (data?.queue || []).map((row) => ({
     slot: row.sequence_no,
+    projectId: row.project_id,
+    title: row.title || undefined,
     stage: row.stage,
     chaptersDone: row.current_chapter,
     totalChapters: row.target_chapters,
@@ -265,9 +299,13 @@ export default function CuanNovelMonitorPage() {
         onRunOneStep={() => {
           void triggerWorkerOnce();
         }}
+        onDeleteItem={(item) => {
+          void handleDeleteItem(item);
+        }}
         autoRun={autoRun}
         onToggleAutoRun={() => setAutoRun((prev) => !prev)}
         busy={loading}
+        deletingSlot={deletingSlot}
       />
 
       {workerMsg && (
