@@ -394,6 +394,53 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let bodyData: Record<string, unknown> = {};
+    try {
+      bodyData = (await req.json()) as Record<string, unknown>;
+    } catch {
+      bodyData = {};
+    }
+
+    if (bodyData.action === 'delete_slot') {
+      const slotNo = Number(bodyData.slot);
+      const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
+      const projectId = typeof bodyData.projectId === 'string' ? bodyData.projectId.trim() : '';
+
+      let resolvedProjectId = projectId;
+      if (!resolvedProjectId && slotId) {
+        const rows = (await sbFetch(
+          `cuannovel_queue?id=eq.${encodeURIComponent(slotId)}&limit=1`
+        )) as Array<{ project_id?: string | null }>;
+        resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
+      } else if (!resolvedProjectId && Number.isFinite(slotNo) && slotNo > 0) {
+        const rows = (await sbFetch(
+          `cuannovel_queue?sequence_no=eq.${slotNo}&order=id.desc&limit=1`
+        )) as Array<{ project_id?: string | null }>;
+        resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
+      }
+
+      if (resolvedProjectId) {
+        await purgeProjectCompletely(resolvedProjectId);
+      }
+
+      if (slotId) {
+        await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
+          method: 'DELETE'
+        }).catch(() => null);
+      } else if (Number.isFinite(slotNo) && slotNo > 0) {
+        await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
+          method: 'DELETE'
+        }).catch(() => null);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action: 'delete_slot',
+        deletedSlot: Number.isFinite(slotNo) ? slotNo : null,
+        deletedProjectId: resolvedProjectId || null
+      });
+    }
+
     const batches = (await sbFetch(
       'cuannovel_batches?status=eq.running&order=created_at.asc&limit=1'
     )) as CuanNovelBatch[];
