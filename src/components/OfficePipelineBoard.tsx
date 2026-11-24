@@ -29,11 +29,11 @@ interface OfficePipelineBoardProps {
 }
 
 const PIPELINE_STAGES = [
-  { key: 'scout_research', label: '1. Riset' },
-  { key: 'novelku_production', label: '2. Tulis Bab' },
-  { key: 'formatting_kdp', label: '3. Rapikan' },
-  { key: 'packaging_zip', label: '4. Kemas Paket' },
-  { key: 'gdrive_upload', label: '5. Google Drive' }
+  { key: 'scout_research', label: '1. Riset', caption: 'Meriset premis, tokoh & kerangka novel' },
+  { key: 'novelku_production', label: '2. Tulis Bab', caption: 'Menulis naskah bab (min. 1.000 kata/bab)' },
+  { key: 'formatting_kdp', label: '3. Audit & Rapikan', caption: 'Memeriksa kelayakan bab & tata naskah' },
+  { key: 'packaging_zip', label: '4. Kemas Paket', caption: 'Menyusun paket naskah & metadata siap kirim' },
+  { key: 'gdrive_upload', label: '5. Google Drive', caption: 'Mengunggah paket novel ke folder Google Drive' }
 ];
 
 function getStageIndex(stage: string, chaptersDone: number, totalChapters: number): number {
@@ -44,7 +44,7 @@ function getStageIndex(stage: string, chaptersDone: number, totalChapters: numbe
   if (s.includes('pack') || s.includes('zip') || s.includes('export')) {
     return 3;
   }
-  if (s.includes('format') || s.includes('edit') || s.includes('kdp') || s.includes('cover')) {
+  if (s.includes('audit') || s.includes('format') || s.includes('edit') || s.includes('kdp') || s.includes('cover')) {
     return 2;
   }
   if (s.includes('novelku') || s.includes('production') || s.includes('write') || chaptersDone > 0) {
@@ -53,6 +53,136 @@ function getStageIndex(stage: string, chaptersDone: number, totalChapters: numbe
   }
   return 0;
 }
+
+function pickSingleActiveSlot(slots: PipelineSlotState[]): PipelineSlotState | null {
+  if (!Array.isArray(slots) || slots.length === 0) return null;
+
+  const running = slots.find((s) => s.isRunning);
+  if (running) return running;
+
+  const inProgress = slots.find((s) => {
+    const st = (s.stage || '').toLowerCase();
+    return (
+      !st.includes('completed') &&
+      !st.includes('done') &&
+      !st.includes('failed_purged') &&
+      (s.chaptersDone > 0 ||
+        st.includes('novelku') ||
+        st.includes('production') ||
+        st.includes('audit') ||
+        st.includes('pack') ||
+        st.includes('drive'))
+    );
+  });
+  if (inProgress) return inProgress;
+
+  const firstPending = slots.find((s) => {
+    const st = (s.stage || '').toLowerCase();
+    return !st.includes('completed') && !st.includes('done') && !st.includes('failed_purged');
+  });
+  return firstPending || slots[0];
+}
+
+const StageAnimationArt: React.FC<{
+  stageIndex: number;
+  isRunning: boolean;
+  isError: boolean;
+}> = ({ stageIndex, isRunning, isError }) => {
+  const animClass = isRunning ? 'is-animating' : 'is-paused';
+
+  if (stageIndex === 0) {
+    // Animasi 1: Riset Proyek (lensa pembesar memindai kartu ide & catatan riset)
+    return (
+      <svg width="112" height="72" viewBox="0 0 112 72" className={`cn-svg ${animClass}`} aria-hidden="true">
+        <rect x="8" y="48" width="96" height="5" rx="2" fill="#1e293b" />
+        <rect x="14" y="14" width="44" height="28" rx="4" fill="#ffffff" stroke="#94a3b8" strokeWidth="2" />
+        <line x1="20" y1="22" x2="46" y2="22" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="20" y1="29" x2="50" y2="29" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="20" y1="36" x2="38" y2="36" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" />
+        <g className="cn-research-scan">
+          <circle cx="72" cy="28" r="11" fill="#e0f2fe" fillOpacity="0.85" stroke="#0284c7" strokeWidth="3" />
+          <line x1="80" y1="36" x2="90" y2="45" stroke="#0284c7" strokeWidth="3.5" strokeLinecap="round" />
+        </g>
+        <text x="16" y="65" fontSize="9" fontWeight="700" fill="#0369a1">RISET PROYEK</text>
+      </svg>
+    );
+  }
+
+  if (stageIndex === 1) {
+    // Animasi 2: Tulis Bab (penulis mengetik di monitor & halaman bab bertambah)
+    return (
+      <svg width="112" height="72" viewBox="0 0 112 72" className={`cn-svg ${animClass}`} aria-hidden="true">
+        <rect x="8" y="48" width="96" height="5" rx="2" fill="#1e293b" />
+        <rect x="14" y="14" width="34" height="24" rx="3" fill="#0f172a" />
+        <rect
+          x="17"
+          y="17"
+          width="28"
+          height="17"
+          rx="1.5"
+          fill={isError ? '#ef4444' : '#10b981'}
+          className="cn-write-screen"
+        />
+        <rect x="29" y="38" width="4" height="10" fill="#64748b" />
+        <g className="cn-write-author">
+          <circle cx="64" cy="20" r="6" fill="#f59e0b" />
+          <path d="M55 48 C55 32, 73 32, 73 48 Z" fill="#2563eb" />
+          <circle cx="53" cy="40" r="2.8" fill="#fbbf24" className="cn-write-hand" />
+        </g>
+        <rect x="79" y="22" width="18" height="22" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" className="cn-write-page" />
+        <text x="16" y="65" fontSize="9" fontWeight="700" fill={isError ? '#b91c1c' : '#047857'}>
+          {isError ? 'ULANG BAB (<1K)' : 'MENULIS BAB'}
+        </text>
+      </svg>
+    );
+  }
+
+  if (stageIndex === 2) {
+    // Animasi 3: Audit & Rapikan (pemeriksaan kualitas & centang kelayakan)
+    return (
+      <svg width="112" height="72" viewBox="0 0 112 72" className={`cn-svg ${animClass}`} aria-hidden="true">
+        <rect x="8" y="48" width="96" height="5" rx="2" fill="#1e293b" />
+        <rect x="20" y="12" width="44" height="32" rx="3" fill="#ffffff" stroke="#64748b" strokeWidth="2" />
+        <line x1="27" y1="20" x2="55" y2="20" stroke="#94a3b8" strokeWidth="2" />
+        <line x1="27" y1="27" x2="55" y2="27" stroke="#94a3b8" strokeWidth="2" />
+        <line x1="27" y1="34" x2="46" y2="34" stroke="#94a3b8" strokeWidth="2" />
+        <g className="cn-audit-stamp">
+          <circle cx="80" cy="29" r="13" fill="#dcfce7" stroke="#16a34a" strokeWidth="2.5" />
+          <path d="M74 29 L78 33 L86 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+        <text x="16" y="65" fontSize="9" fontWeight="700" fill="#15803d">AUDITOR &amp; TATA LETAK</text>
+      </svg>
+    );
+  }
+
+  if (stageIndex === 3) {
+    // Animasi 4: Kemas Paket (naskah masuk ke kotak paket tersegel)
+    return (
+      <svg width="112" height="72" viewBox="0 0 112 72" className={`cn-svg ${animClass}`} aria-hidden="true">
+        <rect x="8" y="48" width="96" height="5" rx="2" fill="#1e293b" />
+        <rect x="22" y="14" width="16" height="20" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" className="cn-pack-sheet" />
+        <g className="cn-pack-box">
+          <rect x="52" y="22" width="34" height="26" rx="3" fill="#f59e0b" stroke="#b45309" strokeWidth="2" />
+          <line x1="69" y1="22" x2="69" y2="48" stroke="#fef3c7" strokeWidth="2.5" />
+        </g>
+        <text x="16" y="65" fontSize="9" fontWeight="700" fill="#b45309">MENGEMAS PAKET</text>
+      </svg>
+    );
+  }
+
+  // Animasi 5: Unggah Google Drive (paket meluncur ke folder/awan Drive)
+  return (
+    <svg width="112" height="72" viewBox="0 0 112 72" className={`cn-svg ${animClass}`} aria-hidden="true">
+      <rect x="8" y="48" width="96" height="5" rx="2" fill="#1e293b" />
+      <g className="cn-drive-packet">
+        <rect x="18" y="26" width="22" height="16" rx="2" fill="#2563eb" />
+        <path d="M44 34 H56" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" />
+      </g>
+      <path d="M62 20 H74 L77 24 H94 V46 H62 Z" fill="#16a34a" />
+      <text x="16" y="65" fontSize="9" fontWeight="700" fill="#15803d">TERKIRIM KE GOOGLE DRIVE</text>
+    </svg>
+  );
+};
 
 export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   batchId,
@@ -66,7 +196,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   onToggleAutoRun,
   busy = false
 }) => {
-  const activeSlot = slots.find((s) => s.isRunning) || null;
+  const activeSlot = pickSingleActiveSlot(slots);
 
   return (
     <div className="cn-office-wrap">
@@ -143,23 +273,18 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           border-color: #d97706;
           color: #ffffff;
         }
-        .cn-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-          gap: 16px;
-        }
-        .cn-card {
+        .cn-single-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 12px;
-          padding: 16px;
-          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+          padding: 18px;
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
         }
-        .cn-card.is-running {
+        .cn-single-card.is-running {
           border-color: #10b981;
           box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18);
         }
-        .cn-card.is-error {
+        .cn-single-card.is-error {
           border-color: #ef4444;
           box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14);
         }
@@ -168,14 +293,14 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           justify-content: space-between;
           align-items: center;
           gap: 8px;
-          margin-bottom: 12px;
+          margin-bottom: 14px;
         }
         .cn-slot-tag {
           background: #0f172a;
           color: #ffffff;
           font-size: 12px;
           font-weight: 700;
-          padding: 3px 9px;
+          padding: 4px 10px;
           border-radius: 6px;
         }
         .cn-stage-text {
@@ -209,40 +334,40 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         .cn-desk-box {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 14px;
           background: #f1f5f9;
           border-radius: 10px;
-          padding: 10px 12px;
-          margin-bottom: 12px;
+          padding: 12px 14px;
+          margin-bottom: 14px;
         }
         .cn-desk-status {
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 14px;
+          font-weight: 700;
           color: #0f172a;
         }
         .cn-desk-sub {
           font-size: 12px;
           color: #475569;
-          margin-top: 3px;
+          margin-top: 4px;
         }
         .cn-desk-err {
           font-size: 12px;
           color: #b91c1c;
           font-weight: 600;
-          margin-top: 4px;
+          margin-top: 5px;
         }
         .cn-steps {
           display: grid;
           grid-template-columns: repeat(5, 1fr);
-          gap: 4px;
-          margin-bottom: 12px;
+          gap: 6px;
+          margin-bottom: 14px;
         }
         .cn-step-pill {
           text-align: center;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 700;
-          padding: 5px 3px;
-          border-radius: 6px;
+          padding: 7px 4px;
+          border-radius: 7px;
           background: #f1f5f9;
           color: #64748b;
           border: 1px solid #e2e8f0;
@@ -262,11 +387,11 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           justify-content: space-between;
           font-size: 12px;
           font-weight: 600;
-          margin-bottom: 5px;
+          margin-bottom: 6px;
         }
         .cn-bar-track {
           width: 100%;
-          height: 10px;
+          height: 11px;
           background: #e2e8f0;
           border-radius: 999px;
           overflow: hidden;
@@ -280,53 +405,73 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #ef4444;
         }
         .cn-drive-box {
-          margin-top: 10px;
-          padding: 8px 10px;
+          margin-top: 12px;
+          padding: 9px 12px;
           border-radius: 8px;
           background: #eff6ff;
           border: 1px solid #bfdbfe;
           font-size: 12px;
           color: #1e3a8a;
         }
-        @keyframes cnWorkerType {
+
+        @keyframes cnScanMove {
+          0%, 100% { transform: translate(0px, 0px); }
+          50% { transform: translate(-18px, 3px); }
+        }
+        @keyframes cnBodyBob {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-3px); }
+          50% { transform: translateY(-2.5px); }
         }
         @keyframes cnHandTap {
           0%, 100% { transform: translate(0px, 0px); }
           50% { transform: translate(-2px, 2px); }
         }
-        @keyframes cnDocFlow {
-          0% { transform: translateX(0px); opacity: 0.9; }
-          50% { transform: translateX(9px); opacity: 1; }
-          100% { transform: translateX(0px); opacity: 0.9; }
+        @keyframes cnStampPress {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(3px) scale(0.96); }
         }
-        @keyframes cnScreenPulse {
-          0%, 100% { opacity: 0.75; }
+        @keyframes cnPackSlide {
+          0%, 100% { transform: translate(0px, 0px); }
+          50% { transform: translate(12px, 4px); }
+        }
+        @keyframes cnDriveFly {
+          0%, 100% { transform: translateX(0px); }
+          50% { transform: translateX(10px); }
+        }
+        @keyframes cnPulse {
+          0%, 100% { opacity: 0.72; }
           50% { opacity: 1; }
         }
-        .cn-anim-body {
-          animation: cnWorkerType 0.55s ease-in-out infinite;
-          transform-origin: center;
+
+        .cn-svg.is-animating .cn-research-scan {
+          animation: cnScanMove 1.4s ease-in-out infinite;
         }
-        .cn-anim-hand {
-          animation: cnHandTap 0.32s ease-in-out infinite;
+        .cn-svg.is-animating .cn-write-author {
+          animation: cnBodyBob 0.55s ease-in-out infinite;
         }
-        .cn-anim-doc {
-          animation: cnDocFlow 1.2s ease-in-out infinite;
+        .cn-svg.is-animating .cn-write-hand {
+          animation: cnHandTap 0.3s ease-in-out infinite;
         }
-        .cn-anim-screen {
-          animation: cnScreenPulse 0.9s ease-in-out infinite;
+        .cn-svg.is-animating .cn-write-screen {
+          animation: cnPulse 0.8s ease-in-out infinite;
+        }
+        .cn-svg.is-animating .cn-audit-stamp {
+          animation: cnStampPress 1.1s ease-in-out infinite;
+        }
+        .cn-svg.is-animating .cn-pack-sheet {
+          animation: cnPackSlide 1.3s ease-in-out infinite;
+        }
+        .cn-svg.is-animating .cn-drive-packet {
+          animation: cnDriveFly 1.1s ease-in-out infinite;
         }
       `}</style>
 
       <div className="cn-header">
         <div>
-          <h2 className="cn-title">CuanNovel — Ruang Kantor Pipeline</h2>
+          <h2 className="cn-title">CuanNovel — Ruang Kantor Pipeline (1 Novel Aktif)</h2>
           <div className="cn-meta">
             Batch: <code>{batchId}</code> · {authorPublisher} · Lolos: <strong>{passedCount}</strong> · Status:{' '}
             <strong>{statusText}</strong>
-            {activeSlot ? ` · Sedang bekerja di Slot #${activeSlot.slot}` : ''}
           </div>
         </div>
 
@@ -340,7 +485,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
             disabled={busy}
             className="cn-btn cn-btn-primary"
           >
-            {busy ? 'Worker Menulis...' : 'Jalankan 1 Langkah Worker'}
+            {busy ? 'Worker Bekerja...' : 'Jalankan 1 Langkah Worker'}
           </button>
           <button
             type="button"
@@ -352,22 +497,27 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         </div>
       </div>
 
-      <div className="cn-grid">
-        {slots.map((s) => {
-          const total = Math.max(1, s.totalChapters || 20);
-          const pct = Math.min(100, Math.round((s.chaptersDone / total) * 100));
-          const isErr = Boolean(s.error);
-          const stageIdx = getStageIndex(s.stage, s.chaptersDone, total);
+      {!activeSlot ? (
+        <div className="cn-single-card">
+          Tidak ada slot novel aktif saat ini. Klik <strong>Refresh Status</strong> untuk memuat batch terbaru.
+        </div>
+      ) : (
+        (() => {
+          const total = Math.max(1, activeSlot.totalChapters || 20);
+          const pct = Math.min(100, Math.round((activeSlot.chaptersDone / total) * 100));
+          const isErr = Boolean(activeSlot.error);
+          const stageIdx = getStageIndex(activeSlot.stage, activeSlot.chaptersDone, total);
+          const stageMeta = PIPELINE_STAGES[stageIdx] || PIPELINE_STAGES[0];
 
-          const badgeText = s.isRunning
-            ? 'SEDANG MENULIS'
+          const badgeText = activeSlot.isRunning
+            ? 'SEDANG DIPROSES'
             : isErr
               ? 'PERLU ULANG'
               : stageIdx === 4
                 ? 'DI GOOGLE DRIVE'
-                : 'SIAP JALAN';
+                : 'AKTIF';
 
-          const badgeClass = s.isRunning
+          const badgeClass = activeSlot.isRunning
             ? 'cn-badge cn-badge-run'
             : isErr
               ? 'cn-badge cn-badge-err'
@@ -375,84 +525,42 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
 
           return (
             <div
-              key={s.slot}
-              className={`cn-card ${s.isRunning ? 'is-running' : ''} ${isErr ? 'is-error' : ''}`}
+              className={`cn-single-card ${activeSlot.isRunning ? 'is-running' : ''} ${
+                isErr ? 'is-error' : ''
+              }`}
             >
               <div className="cn-card-top">
                 <div>
-                  <span className="cn-slot-tag">Slot #{s.slot}</span>
-                  <span className="cn-stage-text">{s.stage}</span>
+                  <span className="cn-slot-tag">Novel Aktif · Slot #{activeSlot.slot}</span>
+                  <span className="cn-stage-text">{activeSlot.stage}</span>
                 </div>
                 <span className={badgeClass}>{badgeText}</span>
               </div>
 
               <div className="cn-desk-box">
-                <svg
-                  width="96"
-                  height="64"
-                  viewBox="0 0 96 64"
-                  style={{ flexShrink: 0 }}
-                  aria-hidden="true"
-                >
-                  {/* Lantai & Meja Kerja */}
-                  <rect x="6" y="42" width="60" height="5" rx="2" fill="#1e293b" />
-                  <rect x="12" y="47" width="4" height="13" fill="#475569" />
-                  <rect x="56" y="47" width="4" height="13" fill="#475569" />
-
-                  {/* Monitor */}
-                  <rect x="14" y="16" width="24" height="17" rx="2" fill="#0f172a" />
-                  <rect
-                    x="16"
-                    y="18"
-                    width="20"
-                    height="12"
-                    rx="1"
-                    fill={isErr ? '#ef4444' : s.isRunning ? '#10b981' : '#38bdf8'}
-                    className={s.isRunning ? 'cn-anim-screen' : ''}
-                  />
-                  <rect x="24" y="33" width="4" height="9" fill="#64748b" />
-
-                  {/* Staf Worker */}
-                  <g className={s.isRunning ? 'cn-anim-body' : ''}>
-                    <circle cx="48" cy="17" r="5.5" fill="#f59e0b" />
-                    <path d="M40 42 C40 28, 56 28, 56 42 Z" fill="#2563eb" />
-                    <g className={s.isRunning ? 'cn-anim-hand' : ''}>
-                      <circle cx="39" cy="37" r="2.5" fill="#fbbf24" />
-                    </g>
-                  </g>
-
-                  {/* Dokumen & Tujuan Google Drive */}
-                  <g className={s.isRunning ? 'cn-anim-doc' : ''}>
-                    <rect x="53" y="31" width="11" height="8" rx="1" fill="#ffffff" stroke="#94a3b8" />
-                  </g>
-
-                  {/* Ikon Folder / Drive */}
-                  <path
-                    d="M72 25 H79 L81 28 H90 V42 H72 Z"
-                    fill={stageIdx === 4 ? '#16a34a' : '#3b82f6'}
-                  />
-                  <text x="75" y="54" fontSize="8" fontWeight="700" fill="#334155">
-                    DRIVE
-                  </text>
-                </svg>
+                <StageAnimationArt
+                  stageIndex={stageIdx}
+                  isRunning={Boolean(activeSlot.isRunning || autoRun)}
+                  isError={isErr}
+                />
 
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="cn-desk-status">
-                    {s.isRunning
-                      ? `Menulis Bab ${s.chaptersDone + 1} via NOVELKU AI...`
-                      : `Tahap aktif: ${PIPELINE_STAGES[stageIdx]?.label || s.stage}`}
+                    {activeSlot.isRunning
+                      ? `${stageMeta.label} — Sedang memproses...`
+                      : `Tahap aktif: ${stageMeta.label}`}
                   </div>
                   <div className="cn-desk-sub">
-                    {typeof s.lastWords === 'number'
-                      ? `Bab terakhir: ${s.lastWords} kata`
-                      : 'Menunggu hitungan kata bab berikutnya'}
-                    {s.provider ? ` · ${s.provider}` : ''}
+                    {stageMeta.caption}
+                    {typeof activeSlot.lastWords === 'number'
+                      ? ` · Bab terakhir: ${activeSlot.lastWords} kata`
+                      : ''}
+                    {activeSlot.provider ? ` · ${activeSlot.provider}` : ''}
                   </div>
-                  {isErr && <div className="cn-desk-err">{s.error}</div>}
+                  {isErr && <div className="cn-desk-err">{activeSlot.error}</div>}
                 </div>
               </div>
 
-              {/* Indikator 5 Tahap Sampai Google Drive */}
               <div className="cn-steps">
                 {PIPELINE_STAGES.map((st, idx) => {
                   const pillClass =
@@ -469,12 +577,11 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                 })}
               </div>
 
-              {/* Bar Progres Bab */}
               <div>
                 <div className="cn-bar-head">
-                  <span>Progres Naskah</span>
+                  <span>Progres Bab Novel</span>
                   <span>
-                    {s.chaptersDone}/{total} bab ({pct}%)
+                    {activeSlot.chaptersDone}/{total} bab ({pct}%)
                   </span>
                 </div>
                 <div className="cn-bar-track">
@@ -485,16 +592,18 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                 </div>
               </div>
 
-              {(s.driveFileName || stageIdx === 4) && (
+              {(activeSlot.driveFileName || activeSlot.driveUrl || stageIdx === 4) && (
                 <div className="cn-drive-box">
                   Paket Google Drive:{' '}
-                  <strong>{s.driveFileName || `Paket_Novel_Slot_${s.slot}.zip`}</strong>
-                  {s.driveUrl ? (
+                  <strong>
+                    {activeSlot.driveFileName || `Paket_Novel_Slot_${activeSlot.slot}.zip`}
+                  </strong>
+                  {activeSlot.driveUrl ? (
                     <>
                       {' '}
                       ·{' '}
-                      <a href={s.driveUrl} target="_blank" rel="noreferrer">
-                        Buka di Drive
+                      <a href={activeSlot.driveUrl} target="_blank" rel="noreferrer">
+                        Buka Folder Drive
                       </a>
                     </>
                   ) : null}
@@ -502,8 +611,8 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
               )}
             </div>
           );
-        })}
-      </div>
+        })()
+      )}
     </div>
   );
 };
