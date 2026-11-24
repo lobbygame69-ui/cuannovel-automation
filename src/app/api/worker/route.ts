@@ -928,6 +928,42 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (bodyData.action === 'set_stage') {
+      const slotNo = Number(bodyData.slot);
+      const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
+      const targetStage =
+        typeof bodyData.stage === 'string' && bodyData.stage.trim()
+          ? bodyData.stage.trim()
+          : 'packaging_zip';
+
+      if (slotId) {
+        await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            stage: targetStage,
+            last_error: null,
+            updated_at: new Date().toISOString()
+          })
+        });
+      } else if (Number.isFinite(slotNo) && slotNo > 0) {
+        await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            stage: targetStage,
+            last_error: null,
+            updated_at: new Date().toISOString()
+          })
+        });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        action: 'set_stage',
+        slot: Number.isFinite(slotNo) ? slotNo : null,
+        stage: targetStage
+      });
+    }
+
     const batches = (await sbFetch(
       'cuannovel_batches?status=eq.running&order=created_at.asc&limit=1'
     )) as CuanNovelBatch[];
