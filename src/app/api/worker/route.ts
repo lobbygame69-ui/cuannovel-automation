@@ -464,6 +464,151 @@ function buildInteriorHtml(
 </html>`;
 }
 
+function estimateTotalPages(chapters: ChapterRow[]): number {
+  const totalWords = chapters.reduce((acc, ch) => acc + countWords(ch.content), 0);
+  const contentPages = Math.max(24, Math.ceil(totalWords / 260));
+  return 5 + contentPages;
+}
+
+function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[] {
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const w of words) {
+    const candidate = current ? `${current} ${w}` : w;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = w;
+      if (lines.length >= maxLines) break;
+    }
+  }
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+  return lines;
+}
+
+function buildKdpCoverSvgs(
+  project: ProjectRow,
+  batch: CuanNovelBatch,
+  chapters: ChapterRow[]
+): {
+  ebookCoverSvg: string;
+  paperbackCoverSvg: string;
+  spineWidthInches: number;
+  estimatedPages: number;
+} {
+  const dpi = 300;
+  const trimW = 6;
+  const trimH = 9;
+  const bleed = 0.125;
+
+  const estimatedPages = estimateTotalPages(chapters);
+  const spineWidthInches = Number(Math.max(0.25, estimatedPages * 0.002252).toFixed(3));
+
+  const fullWIn = Number((bleed + trimW + spineWidthInches + trimW + bleed).toFixed(3));
+  const fullHIn = Number((bleed + trimH + bleed).toFixed(3));
+
+  const fullW = Math.round(fullWIn * dpi);
+  const fullH = Math.round(fullHIn * dpi);
+  const bleedPx = Math.round(bleed * dpi);
+  const trimWPx = Math.round(trimW * dpi);
+  const spinePx = Math.round(spineWidthInches * dpi);
+
+  const backX = bleedPx;
+  const spineX = bleedPx + trimWPx;
+  const frontX = spineX + spinePx;
+
+  const titleLines = wrapSvgLines(project.title, 18, 4);
+  const synopsisLines = wrapSvgLines(project.synopsis, 44, 14);
+
+  const titleSvgFront = titleLines
+    .map(
+      (line, i) =>
+        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${620 + i * 135}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+    )
+    .join('\n');
+
+  const synopsisSvgBack = synopsisLines
+    .map(
+      (line, i) =>
+        `<text x="${backX + 180}" y="${520 + i * 64}" font-family="Georgia, serif" font-size="44" fill="#e2e8f0">${escapeHtml(line)}</text>`
+    )
+    .join('\n');
+
+  const ebookTitleSvg = titleLines
+    .map(
+      (line, i) =>
+        `<text x="800" y="${640 + i * 130}" text-anchor="middle" font-family="Georgia, serif" font-size="108" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+    )
+    .join('\n');
+
+  const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
+  <defs>
+    <linearGradient id="ebBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="2560" fill="url(#ebBg)"/>
+  <rect x="90" y="90" width="1420" height="2380" fill="none" stroke="#d97706" stroke-width="6" opacity="0.7"/>
+  <text x="800" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fbbf24">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+  ${ebookTitleSvg}
+  <circle cx="800" cy="1480" r="190" fill="none" stroke="#fbbf24" stroke-width="5" opacity="0.6"/>
+  <text x="800" y="2260" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+</svg>`;
+
+  const barcodeW = Math.round(2.0 * dpi);
+  const barcodeH = Math.round(1.2 * dpi);
+  const barcodeX = spineX - 150 - barcodeW;
+  const barcodeY = fullH - bleedPx - 150 - barcodeH;
+
+  const spineCenterX = spineX + Math.round(spinePx / 2);
+  const spineCenterY = Math.round(fullH / 2);
+
+  const paperbackCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${fullW}" height="${fullH}" viewBox="0 0 ${fullW} ${fullH}">
+  <defs>
+    <linearGradient id="pbBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="${fullW}" height="${fullH}" fill="url(#pbBg)"/>
+  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#475569" stroke-width="2" opacity="0.45"/>
+  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#475569" stroke-width="2" opacity="0.45"/>
+  <text x="${backX + 180}" y="380" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
+  ${synopsisSvgBack}
+  <text x="${backX + 180}" y="${fullH - bleedPx - 220}" font-family="Arial, sans-serif" font-size="38" fill="#cbd5e1">${escapeHtml(batch.publisher_name)}</text>
+  <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="10" fill="#ffffff"/>
+  ${
+    spineWidthInches >= 0.35
+      ? `<g transform="translate(${spineCenterX}, ${spineCenterY}) rotate(90)">
+          <text x="0" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="40" font-weight="bold" fill="#f8fafc">${escapeHtml(project.title)} — ${escapeHtml(project.pen_name)}</text>
+        </g>`
+      : ''
+  }
+  <rect x="${frontX + 120}" y="${bleedPx + 120}" width="${trimWPx - 240}" height="${fullH - bleedPx * 2 - 240}" fill="none" stroke="#d97706" stroke-width="6" opacity="0.7"/>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" letter-spacing="6" fill="#fbbf24">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+  ${titleSvgFront}
+  <circle cx="${frontX + Math.round(trimWPx / 2)}" cy="1560" r="200" fill="none" stroke="#fbbf24" stroke-width="5" opacity="0.6"/>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 260}" text-anchor="middle" font-family="Georgia, serif" font-size="68" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+</svg>`;
+
+  return {
+    ebookCoverSvg,
+    paperbackCoverSvg,
+    spineWidthInches,
+    estimatedPages
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const cronSecret = getEnv('CRON_SECRET');
@@ -857,13 +1002,21 @@ export async function POST(req: NextRequest) {
       const project = projects[0];
       const chapterList = Array.isArray(chapters) ? chapters : [];
       const interiorHtml = buildInteriorHtml(project, batch, chapterList);
+      const {
+        ebookCoverSvg,
+        paperbackCoverSvg,
+        spineWidthInches,
+        estimatedPages
+      } = buildKdpCoverSvgs(project, batch, chapterList);
+
       const metadataTxt = [
         `Title: ${project.title}`,
         `Author: ${project.pen_name}`,
         `Publisher: ${batch.publisher_name}`,
         `Language: ${langLabel(lang)}`,
         `Genre: ${project.genre}`,
-        `Trim Size: 6" x 9" (White Paper)`,
+        `Trim Size: 6" x 9" (White Paper, Bleed 0.125")`,
+        `Estimated Pages: ${estimatedPages} | Spine Width: ${spineWidthInches}"`,
         `Chapters: ${chapterList.length}`,
         `Quality Score: ${slot.quality_score ?? 85}/100`,
         `Synopsis: ${project.synopsis}`
@@ -875,6 +1028,10 @@ export async function POST(req: NextRequest) {
         publisher: batch.publisher_name,
         language: lang,
         interiorHtml,
+        ebookCoverSvg,
+        paperbackCoverSvg,
+        spineWidthInches,
+        estimatedPages,
         metadataTxt
       });
 
