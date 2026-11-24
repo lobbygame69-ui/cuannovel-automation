@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { OfficePipelineBoard, PipelineSlotState } from '../components/OfficePipelineBoard';
+import { extractShortChapterInfo } from '../lib/cuannovel';
 
 interface QueueRow {
   id: string;
@@ -9,6 +10,7 @@ interface QueueRow {
   stage: string;
   current_chapter: number;
   target_chapters: number;
+  drive_folder_url?: string | null;
   last_error: string | null;
 }
 
@@ -36,12 +38,17 @@ export default function CuanNovelMonitorPage() {
   const [loading, setLoading] = useState(false);
   const [runningSlotNo, setRunningSlotNo] = useState<number | null>(null);
   const [workerMsg, setWorkerMsg] = useState('');
-  const [autoRun, setAutoRun] = useState(false);
+  const [autoRun, setAutoRun] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [lastWordsBySlot, setLastWordsBySlot] = useState<Record<number, number>>({});
   const [lastProviderBySlot, setLastProviderBySlot] = useState<Record<number, string>>({});
 
-  const refreshStatus = useCallback(async () => {
-    setLoading(true);
+  const autoRunRef = useRef(autoRun);
+  autoRunRef.current = autoRun;
+
+  const busyRef = useRef(false);
+
+  const refreshStatus = useCallback(async (): Promise<StatusPayload> => {
     try {
       const res = await fetch('/api/status', { cache: 'no-store' });
       const json = (await res.json()) as StatusPayload;
@@ -55,82 +62,173 @@ export default function CuanNovelMonitorPage() {
       };
       setData(fallback);
       return fallback;
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  const triggerWorkerOnce = useCallback(async (): Promise<boolean> => {
-    const activeSlot =
-      (data?.queue || []).find((r) => r.stage === 'novelku_production') ||
-      (data?.queue || [])[0] ||
-      null;
+  const runSingleWorkerStep = useCallback(
+    async (currentData: StatusPayload | null): Promise<{
+      finishedNovel: boolean;
+      needsRetry: boolean;
+      delayMs: number;
+    }> => {
+      const queue = currentData?.queue || [];
+      const activeSlot =
+        queue.find((r) => r.current_chapter < r.target_chapters) ||
+        queue.find((r) => r.stage === 'novelku_production') ||
+        queue.find((r) => /audit|pack|drive|upload/i.test(r.stage)) ||
+        queue[0] ||
+        null;
 
-    setLoading(true);
-    setRunningSlotNo(activeSlot ? activeSlot.sequence_no : 1);
-    setWorkerMsg('Menjalankan 1 langkah worker...');
+      if (!activeSlot) {
+        return { finishedNovel: true, needsRetry: false, delayMs: 3000 };
+      }
 
-    try {
-      const res = await fetch('/api/worker', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer cuannovel99@'
-        }
-      });
-      const text = await res.text();
-      setWorkerMsg(`HTTP ${res.status}: ${text}`);
+      const allDone =
+        queue.length > 0 &&
+        queue.every(
+          (r) =>
+            r.current_chapter >= r.target_chapters &&
+            !r.last_error &&
+            /drive|upload|done|completed/i.test(r.stage)
+        );
+
+      if (allDone) {
+        return { finishedNovel: true, needsRetry: false, delayMs: 4000 };
+      }
+
+      const shortInfo = extractShortChapterInfo(activeSlot.last_error);
+      setRunningSlotNo(activeSlot.sequence_no);
+      setWorkerMsg(
+        shortInfo.isTooShort
+          ? `Bab ${shortInfo.chapter || activeSlot.current_chapter + 1} baru ${shortInfo.words ?? '?'} kata (<1.000). Mengulang otomatis...`
+          : `Memproses Slot #${activeSlot.sequence_no} (${activeSlot.stage}) — Bab ${activeSlot.current_chapter}/${activeSlot.target_chapters}...`
+      );
 
       try {
-        const parsed = JSON.parse(text) as {
-          ok?: boolean;
-          slot?: number;
-          words?: number;
-          provider?: string;
-        };
-        if (parsed.slot) {
-          if (typeof parsed.words === 'number') {
-            setLastWordsBySlot((prev) => ({ ...prev, [parsed.slot!]: parsed.words! }));
+        const res = await fetch('/api/worker', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer cuannovel99@'
+          },
+          body: JSON.stringify({
+            slot: activeSlot.sequence_no,
+            minWords: 1000,
+            auditBeforePackaging: true,
+            autoRetryShortChapter: true,
+            retryAttempt: retryCount + 1
+          })
+        });
+
+        const text = await res.text();
+        setWorkerMsg(`HTTP ${res.status}: ${text}`);
+
+        try {
+          const parsed = JSON.parse(text) as {
+            ok?: boolean;
+            slot?: number;
+            words?: number;
+            provider?: string;
+            error?: string;
+          };
+          if (parsed.slot) {
+            if (typeof parsed.words === 'number') {
+              setLastWordsBySlot((prev) => ({ ...prev, [parsed.slot!]: parsed.words! }));
+            }
+            if (parsed.provider) {
+              setLastProviderBySlot((prev) => ({ ...prev, [parsed.slot!]: parsed.provider! }));
+            }
           }
-          if (parsed.provider) {
-            setLastProviderBySlot((prev) => ({ ...prev, [parsed.slot!]: parsed.provider! }));
+          if (!res.ok || parsed.ok === false) {
+            setRetryCount((c) => c + 1);
+            return { finishedNovel: false, needsRetry: true, delayMs: 3500 };
+          }
+        } catch {
+          if (!res.ok) {
+            setRetryCount((c) => c + 1);
+            return { finishedNovel: false, needsRetry: true, delayMs: 3500 };
           }
         }
-      } catch {
-        // abaikan jika respons bukan JSON murni
-      }
 
-      const latest = await refreshStatus();
-      return Boolean(res.ok && latest.ok && !latest.hasError);
-    } catch (err) {
-      setWorkerMsg(err instanceof Error ? err.message : 'Gagal memicu worker');
-      return false;
+        const latest = await refreshStatus();
+        const updatedSlot =
+          (latest.queue || []).find((r) => r.sequence_no === activeSlot.sequence_no) || activeSlot;
+        const stillShort = extractShortChapterInfo(updatedSlot.last_error).isTooShort;
+
+        if (stillShort || Boolean(updatedSlot.last_error)) {
+          setRetryCount((c) => c + 1);
+          return { finishedNovel: false, needsRetry: true, delayMs: 2500 };
+        }
+
+        setRetryCount(0);
+        return { finishedNovel: false, needsRetry: false, delayMs: 1800 };
+      } catch (err) {
+        setWorkerMsg(err instanceof Error ? err.message : 'Gagal memicu worker');
+        setRetryCount((c) => c + 1);
+        return { finishedNovel: false, needsRetry: true, delayMs: 4000 };
+      } finally {
+        setRunningSlotNo(null);
+      }
+    },
+    [refreshStatus, retryCount]
+  );
+
+  const triggerWorkerOnce = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setLoading(true);
+    try {
+      await runSingleWorkerStep(data);
     } finally {
-      setRunningSlotNo(null);
+      busyRef.current = false;
       setLoading(false);
     }
-  }, [data?.queue, refreshStatus]);
+  }, [data, runSingleWorkerStep]);
 
   useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
 
-  useEffect(() => {
-    if (!autoRun) return;
-    const timer = setTimeout(async () => {
-      if (loading) return;
-      const ok = await triggerWorkerOnce();
-      if (!ok) {
-        setAutoRun(false);
+    const loop = async () => {
+      if (cancelled) return;
+      const latestStatus = await refreshStatus();
+      if (cancelled) return;
+
+      if (autoRunRef.current && !busyRef.current) {
+        busyRef.current = true;
+        setLoading(true);
+        const result = await runSingleWorkerStep(latestStatus);
+        busyRef.current = false;
+        setLoading(false);
+
+        if (result.finishedNovel) {
+          setAutoRun(false);
+          return;
+        }
+
+        if (!cancelled && autoRunRef.current) {
+          timerId = setTimeout(loop, result.delayMs);
+        }
+        return;
       }
-    }, 3500);
-    return () => clearTimeout(timer);
-  }, [autoRun, loading, triggerWorkerOnce]);
+
+      if (!cancelled && autoRunRef.current) {
+        timerId = setTimeout(loop, 3000);
+      }
+    };
+
+    void loop();
+
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [autoRun, refreshStatus, runSingleWorkerStep]);
 
   const isHealthy = Boolean(data?.ok && !data?.hasError);
   const statusBannerText = isHealthy
     ? 'STATUS: AMAN — Tidak ada error pada pipeline'
-    : `STATUS: ADA ERROR — ${data?.latestError || data?.error || 'Periksa detail di bawah'}`;
+    : `STATUS: OTOMATIS MENGULANG — ${data?.latestError || data?.error || 'Menyesuaikan hasil bab'}`;
 
   const mappedSlots: PipelineSlotState[] = (data?.queue || []).map((row) => ({
     slot: row.sequence_no,
@@ -139,6 +237,7 @@ export default function CuanNovelMonitorPage() {
     totalChapters: row.target_chapters,
     lastWords: lastWordsBySlot[row.sequence_no],
     provider: lastProviderBySlot[row.sequence_no],
+    driveUrl: row.drive_folder_url || undefined,
     error: row.last_error,
     isRunning: runningSlotNo === row.sequence_no
   }));
