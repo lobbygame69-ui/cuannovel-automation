@@ -338,22 +338,81 @@ async function uploadToDriveBridge(payload: Record<string, unknown>): Promise<st
   return json.folderUrl || null;
 }
 
+function escapeHtml(value: string): string {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function buildInteriorHtml(
   project: ProjectRow,
   batch: CuanNovelBatch,
   chapters: ChapterRow[]
 ): string {
   const isEn = normalizeLang(batch.language) === 'en';
-  const chapterHtml = chapters
-    .sort((a, b) => a.chapter_number - b.chapter_number)
+  const sortedChapters = [...chapters].sort((a, b) => a.chapter_number - b.chapter_number);
+  const yearNow = new Date().getFullYear();
+
+  // Lembar 1 = hlm 1, Balik Lembar 1 = hlm 2, Lembar 2 = hlm 3, Lembar 3 = hlm 4, Bab mulai hlm 5
+  const startPage = 5;
+  const pagesPerChapter = 4;
+
+  const tocRows = sortedChapters
+    .map((ch, idx) => {
+      const pageNum = startPage + idx * pagesPerChapter;
+      const label = isEn ? `Chapter ${ch.chapter_number}` : `Bab ${ch.chapter_number}`;
+      return `<li><span>${label}: ${escapeHtml(ch.title)}</span><span>${pageNum}</span></li>`;
+    })
+    .join('\n');
+
+  const copyrightBlock = isEn
+    ? `
+      <h2>Copyright</h2>
+      <p>Copyright &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Published by ${escapeHtml(batch.publisher_name)}.</p>
+      <p>All rights reserved. No part of this publication may be reproduced or distributed in any form without prior written permission from the author and publisher.</p>
+    `
+    : `
+      <h2>Hak Cipta</h2>
+      <p>Hak Cipta &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Diterbitkan oleh ${escapeHtml(batch.publisher_name)}.</p>
+      <p>Seluruh hak cipta dilindungi undang-undang. Dilarang memperbanyak atau menyebarkan bagian mana pun dari buku ini tanpa izin tertulis dari penulis dan penerbit.</p>
+    `;
+
+  const openingAck = isEn
+    ? `
+      <h2>Acknowledgments</h2>
+      <p>Thank you for picking up this story. Every page was crafted to accompany your quiet moments and spark imagination.</p>
+    `
+    : `
+      <h2>Ucapan Terima Kasih</h2>
+      <p>Terima kasih telah membuka dan membaca kisah ini. Semoga setiap halaman dapat menemani waktu luang Anda dengan cerita yang berkesan.</p>
+    `;
+
+  const closingAck = isEn
+    ? `
+      <h2>Thank You, Dear Reader</h2>
+      <p>Thank you for staying until the final chapter of <em>${escapeHtml(project.title)}</em>. Your time and support mean everything.</p>
+      <p>— ${escapeHtml(project.pen_name)}</p>
+    `
+    : `
+      <h2>Terima Kasih untuk Pembaca</h2>
+      <p>Terima kasih telah membaca <em>${escapeHtml(project.title)}</em> hingga halaman terakhir. Apresiasi Anda sangat berarti bagi perjalanan menulis ini.</p>
+      <p>— ${escapeHtml(project.pen_name)}</p>
+    `;
+
+  const chapterHtml = sortedChapters
     .map((ch) => {
-      const paragraphs = ch.content
+      const paragraphs = String(ch.content || '')
         .split(/\n\s*\n/)
         .map((p) => p.trim())
         .filter(Boolean)
-        .map((p) => `<p>${p.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+        .map((p) => `<p>${escapeHtml(p)}</p>`)
         .join('\n');
-      return `<section class="chapter"><h2>${isEn ? 'Chapter' : 'Bab'} ${ch.chapter_number}: ${ch.title}</h2>\n${paragraphs}</section>`;
+      const heading = isEn
+        ? `Chapter ${ch.chapter_number}: ${escapeHtml(ch.title)}`
+        : `Bab ${ch.chapter_number}: ${escapeHtml(ch.title)}`;
+      return `<section class="page break-before"><h2>${heading}</h2>\n${paragraphs}</section>`;
     })
     .join('\n');
 
@@ -361,24 +420,46 @@ function buildInteriorHtml(
 <html lang="${isEn ? 'en' : 'id'}">
 <head>
 <meta charset="UTF-8" />
-<title>${project.title}</title>
+<title>${escapeHtml(project.title)}</title>
 <style>
   @page { size: 6in 9in; margin: 0.75in; }
   body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.65; color: #111; }
-  .title-page { page-break-after: always; text-align: center; padding-top: 2.2in; }
-  .chapter { page-break-before: always; }
+  .break-before { page-break-before: always; }
+  .break-after { page-break-after: always; }
+  .title-page { text-align: center; padding-top: 2.2in; }
+  .toc-list { list-style: none; padding: 0; margin: 0; }
+  .toc-list li { display: flex; justify-content: space-between; border-bottom: 1px dotted #aaa; padding: 6px 0; }
   h1 { font-size: 22pt; margin-bottom: 0.5rem; }
-  h2 { font-size: 15pt; margin-bottom: 1rem; }
-  p { text-indent: 1.5em; margin: 0 0 0.75em 0; }
+  h2 { font-size: 15pt; margin-bottom: 0.9rem; }
+  p { text-indent: 1.4em; margin: 0 0 0.7em 0; }
 </style>
 </head>
 <body>
-  <div class="title-page">
-    <h1>${project.title}</h1>
-    <p><strong>${project.pen_name}</strong></p>
-    <p>${batch.publisher_name}</p>
-  </div>
+  <section class="page title-page break-after">
+    <h1>${escapeHtml(project.title)}</h1>
+    <p><strong>${escapeHtml(project.pen_name)}</strong></p>
+  </section>
+
+  <section class="page break-after">
+    ${copyrightBlock}
+  </section>
+
+  <section class="page break-after">
+    ${openingAck}
+  </section>
+
+  <section class="page break-after">
+    <h2>${isEn ? 'Table of Contents' : 'Daftar Isi'}</h2>
+    <ul class="toc-list">
+      ${tocRows}
+    </ul>
+  </section>
+
   ${chapterHtml}
+
+  <section class="page break-before">
+    ${closingAck}
+  </section>
 </body>
 </html>`;
 }
