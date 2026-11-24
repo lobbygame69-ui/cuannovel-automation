@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export interface PipelineSlotState {
   id?: string;
@@ -35,73 +35,79 @@ interface OfficePipelineBoardProps {
   deletingSlot?: number | null;
 }
 
-interface WorkerRoleConfig {
+interface WorkerSpec {
   key: string;
   stationLabel: string;
   shortTitle: string;
   roleTitle: string;
-  workBubble: string;
-  idleBubble: string;
+  workText: string;
+  idleTexts: string[];
   shirtColor: string;
   hairColor: string;
-  roamAnimClass: string;
+  deskRatioX: number;
+  deskRatioY: number;
 }
 
-const WORKER_ROLES: WorkerRoleConfig[] = [
+const WORKER_SPECS: WorkerSpec[] = [
   {
     key: 'scout_research',
     stationLabel: '1. Riset',
     shortTitle: 'Riset Proyek',
     roleTitle: 'Riset Novel',
-    workBubble: 'Riset ide & sinopsis...',
-    idleBubble: 'Mondar-mandir cari ide...',
+    workText: 'Riset ide & sinopsis',
+    idleTexts: ['Mondar-mandir cari ide', 'Cek tren cerita', 'Jalan santai'],
     shirtColor: '#0ea5e9',
     hairColor: '#1e293b',
-    roamAnimClass: 'roam-a'
+    deskRatioX: 0.16,
+    deskRatioY: 0.34
   },
   {
     key: 'novelku_production',
     stationLabel: '2. Tulis Bab',
     shortTitle: 'Tulis Bab',
     roleTitle: 'Penulis Bab',
-    workBubble: 'Mengetik bab cerita...',
-    idleBubble: 'Jalan-jalan cari inspirasi...',
+    workText: 'Menulis bab novel',
+    idleTexts: ['Jalan-jalan cari inspirasi', 'Peregangan sejenak', 'Keliling ruang'],
     shirtColor: '#2563eb',
     hairColor: '#7c2d12',
-    roamAnimClass: 'roam-b'
+    deskRatioX: 0.38,
+    deskRatioY: 0.34
   },
   {
     key: 'formatting_kdp',
     stationLabel: '3. Audit & Rapikan',
     shortTitle: 'Audit & Rapikan',
     roleTitle: 'Auditor KDP',
-    workBubble: 'Cek skor & tata letak...',
-    idleBubble: 'Mondar-mandir santai...',
+    workText: 'Audit bab & tata letak',
+    idleTexts: ['Mondar-mandir santai', 'Cek catatan KDP', 'Jalan-jalan'],
     shirtColor: '#10b981',
     hairColor: '#334155',
-    roamAnimClass: 'roam-c'
+    deskRatioX: 0.6,
+    deskRatioY: 0.34
   },
   {
     key: 'cover_generation',
     stationLabel: '4. Cover & Kemas',
     shortTitle: 'Cover & Kemas Paket',
     roleTitle: 'Desainer Cover',
-    workBubble: 'Desain cover & kemas...',
-    idleBubble: 'Jalan-jalan cek katalog...',
+    workText: 'Desain cover & kemas',
+    idleTexts: ['Jalan-jalan cek warna', 'Istirahat sebentar', 'Mondar-mandir'],
     shirtColor: '#8b5cf6',
     hairColor: '#d97706',
-    roamAnimClass: 'roam-d'
+    deskRatioX: 0.28,
+    deskRatioY: 0.68
   },
   {
     key: 'gdrive_upload',
     stationLabel: '5. Google Drive',
     shortTitle: 'Google Drive',
     roleTitle: 'Kurir Drive',
-    workBubble: 'Kirim ke Google Drive...',
-    idleBubble: 'Mondar-mandir istirahat...',
+    workText: 'Kirim ke Google Drive',
+    idleTexts: ['Mondar-mandir santai', 'Siap antar file', 'Jalan keliling'],
     shirtColor: '#f59e0b',
     hairColor: '#0f172a',
-    roamAnimClass: 'roam-e'
+    deskRatioX: 0.66,
+    deskRatioY: 0.68
   }
 ];
 
@@ -167,170 +173,321 @@ function pickSingleActiveSlot(slots: PipelineSlotState[]): PipelineSlotState | n
   return firstUnfinished || slots[0];
 }
 
-const WorkerCharacterSvg: React.FC<{
-  workerIndex: number;
-  shirtColor: string;
-  hairColor: string;
-  workingHere: boolean;
-  roamingNow: boolean;
-}> = ({ workerIndex, shirtColor, hairColor, workingHere, roamingNow }) => {
-  return (
-    <svg width="56" height="58" viewBox="0 0 56 58" aria-hidden="true">
-      {/* Bayangan di lantai */}
-      <ellipse cx="28" cy="54" rx="13" ry="3" fill="#0f172a" opacity="0.16" />
+interface RoamAgent {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  bubbleIndex: number;
+  bubbleTimer: number;
+  pauseTimer: number;
+  stepPhase: number;
+}
 
-      <g className={workingHere ? 'wk-work-bounce' : roamingNow ? 'wk-walk-bob' : ''}>
-        {/* Kaki kiri & kanan */}
-        <line
-          x1="23"
-          y1="40"
-          x2="23"
-          y2="52"
-          stroke="#1e293b"
-          strokeWidth="3.4"
-          strokeLinecap="round"
-          className={roamingNow ? 'wk-leg-a' : ''}
-        />
-        <line
-          x1="33"
-          y1="40"
-          x2="33"
-          y2="52"
-          stroke="#1e293b"
-          strokeWidth="3.4"
-          strokeLinecap="round"
-          className={roamingNow ? 'wk-leg-b' : ''}
-        />
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
 
-        {/* Badan */}
-        <rect x="18" y="25" width="20" height="16" rx="5" fill={shirtColor} />
-
-        {/* Aksesori khas tiap pekerja */}
-        {workerIndex === 0 && (
-          <circle cx="42" cy="31" r="4.2" fill="#e0f2fe" stroke="#0284c7" strokeWidth="1.8" />
-        )}
-        {workerIndex === 1 && (
-          <rect x="39" y="27" width="8" height="10" rx="1.2" fill="#ffffff" stroke="#64748b" strokeWidth="1.2" />
-        )}
-        {workerIndex === 2 && (
-          <circle cx="42" cy="29" r="4.5" fill="#dcfce7" stroke="#16a34a" strokeWidth="1.5" />
-        )}
-        {workerIndex === 3 && (
-          <rect x="39" y="27" width="9" height="11" rx="1.5" fill="#1e293b" stroke="#fbbf24" strokeWidth="1.2" />
-        )}
-        {workerIndex === 4 && (
-          <rect x="38" y="28" width="10" height="9" rx="1.5" fill="#f59e0b" stroke="#92400e" strokeWidth="1.2" />
-        )}
-
-        {/* Tangan */}
-        <line
-          x1="18"
-          y1="29"
-          x2="12"
-          y2="36"
-          stroke="#fcd34d"
-          strokeWidth="3"
-          strokeLinecap="round"
-          className={workingHere ? 'wk-arm-work' : roamingNow ? 'wk-arm-walk' : ''}
-        />
-        <line
-          x1="38"
-          y1="29"
-          x2="44"
-          y2="36"
-          stroke="#fcd34d"
-          strokeWidth="3"
-          strokeLinecap="round"
-          className={workingHere ? 'wk-arm-work-alt' : roamingNow ? 'wk-arm-walk-alt' : ''}
-        />
-
-        {/* Kepala */}
-        <rect x="19" y="9" width="18" height="16" rx="5" fill="#fde68a" stroke="#d97706" strokeWidth="1.2" />
-        <path d="M19 14 C19 8, 37 8, 37 14 Z" fill={hairColor} />
-
-        {/* Mata */}
-        <circle cx="24.5" cy="18" r="1.7" fill="#0f172a" />
-        <circle cx="31.5" cy="18" r="1.7" fill="#0f172a" />
-      </g>
-    </svg>
-  );
-};
-
-const FiveWorkersOfficeFloor: React.FC<{
+const VirtualOfficeFloorCanvas: React.FC<{
   isAnyWorking: boolean;
   activeStageIdx: number;
-  lastWords?: number;
   chaptersDone: number;
   totalChapters: number;
-}> = ({ isAnyWorking, activeStageIdx, lastWords, chaptersDone, totalChapters }) => {
-  const getDynamicWorkText = (idx: number, defaultText: string) => {
-    if (idx === 1 && chaptersDone > 0) {
-      return `Bab ${chaptersDone}/${totalChapters}${lastWords ? ` (${lastWords}k)` : ''}`;
-    }
-    return defaultText;
+  lastWords?: number;
+}> = ({ isAnyWorking, activeStageIdx, chaptersDone, totalChapters, lastWords }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stateRef = useRef({
+    isAnyWorking,
+    activeStageIdx,
+    chaptersDone,
+    totalChapters,
+    lastWords
+  });
+
+  stateRef.current = {
+    isAnyWorking,
+    activeStageIdx,
+    chaptersDone,
+    totalChapters,
+    lastWords
   };
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const agents: RoamAgent[] = WORKER_SPECS.map((w, i) => ({
+      x: 120 + i * 130,
+      y: i < 3 ? 130 : 230,
+      targetX: 160 + ((i * 157) % 520),
+      targetY: i % 2 === 0 ? 115 : 235,
+      bubbleIndex: i,
+      bubbleTimer: 0,
+      pauseTimer: 0,
+      stepPhase: i * 1.4
+    }));
+
+    let rafId = 0;
+    let lastTime = performance.now();
+
+    const pickNextWaypoint = (idx: number, width: number, height: number): { tx: number; ty: number } => {
+      const minX = Math.max(60, Math.round(width * 0.08));
+      const maxX = Math.max(minX + 80, Math.round(width * 0.92));
+      const minY = Math.max(76, Math.round(height * 0.24));
+      const maxY = Math.max(minY + 60, Math.round(height * 0.86));
+
+      const seed = (idx * 73 + Math.floor(performance.now() / 650)) % 997;
+      const rx = ((seed * 37) % 1000) / 1000;
+      const ry = ((seed * 61) % 1000) / 1000;
+
+      return {
+        tx: minX + rx * (maxX - minX),
+        ty: minY + ry * (maxY - minY)
+      };
+    };
+
+    const renderFrame = (now: number) => {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      const parentWidth = canvas.parentElement?.clientWidth || 780;
+      const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+      const logicalW = Math.max(340, parentWidth);
+      const logicalH = 310;
+
+      if (canvas.width !== Math.round(logicalW * dpr) || canvas.height !== Math.round(logicalH * dpr)) {
+        canvas.width = Math.round(logicalW * dpr);
+        canvas.height = Math.round(logicalH * dpr);
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      // Latar lantai kantor & karpet area tengah
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(0, 0, logicalW, logicalH);
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx < logicalW; gx += 36) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, logicalH);
+        ctx.stroke();
+      }
+      for (let gy = 0; gy < logicalH; gy += 36) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(logicalW, gy);
+        ctx.stroke();
+      }
+
+      const rugX = logicalW * 0.07;
+      const rugY = logicalH * 0.2;
+      const rugW = logicalW * 0.86;
+      const rugH = logicalH * 0.7;
+      ctx.fillStyle = '#dbeafe';
+      drawRoundedRect(ctx, rugX, rugY, rugW, rugH, 14);
+      ctx.fill();
+      ctx.strokeStyle = '#93c5fd';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Gambar 5 meja kerja + monitor
+      WORKER_SPECS.forEach((w, idx) => {
+        const dx = w.deskRatioX * logicalW;
+        const dy = w.deskRatioY * logicalH;
+        const isFocus = stateRef.current.isAnyWorking && idx === stateRef.current.activeStageIdx;
+
+        ctx.fillStyle = isFocus ? '#fef3c7' : '#ffffff';
+        drawRoundedRect(ctx, dx - 28, dy - 10, 56, 22, 5);
+        ctx.fill();
+        ctx.strokeStyle = isFocus ? '#d97706' : '#94a3b8';
+        ctx.lineWidth = isFocus ? 2 : 1.3;
+        ctx.stroke();
+
+        // Layar monitor kecil
+        ctx.fillStyle = '#0f172a';
+        drawRoundedRect(ctx, dx - 10, dy - 18, 20, 11, 2);
+        ctx.fill();
+        ctx.fillStyle = isFocus ? '#34d399' : '#38bdf8';
+        ctx.fillRect(dx - 8, dy - 16, 16, 7);
+      });
+
+      const { isAnyWorking: working, activeStageIdx: activeIdx, chaptersDone: chDone, totalChapters: totCh, lastWords: lw } =
+        stateRef.current;
+
+      // Update posisi & gambar 5 pekerja
+      agents.forEach((ag, idx) => {
+        const spec = WORKER_SPECS[idx];
+        const isWorkerActive = working && idx === activeIdx;
+
+        let goalX = ag.targetX;
+        let goalY = ag.targetY;
+
+        if (isWorkerActive) {
+          goalX = spec.deskRatioX * logicalW;
+          goalY = spec.deskRatioY * logicalH + 22;
+        } else if (working) {
+          goalX = spec.deskRatioX * logicalW + 18;
+          goalY = spec.deskRatioY * logicalH + 26;
+        }
+
+        const dx = goalX - ag.x;
+        const dy = goalY - ag.y;
+        const dist = Math.hypot(dx, dy);
+
+        let isMoving = false;
+        if (ag.pauseTimer > 0) {
+          ag.pauseTimer -= dt;
+        } else if (dist > 3) {
+          const speed = isWorkerActive ? 95 : 54;
+          const step = Math.min(dist, speed * dt);
+          ag.x += (dx / dist) * step;
+          ag.y += (dy / dist) * step;
+          ag.stepPhase += dt * 9;
+          isMoving = true;
+        } else if (!working) {
+          ag.pauseTimer = 0.65;
+          const nextWp = pickNextWaypoint(idx, logicalW, logicalH);
+          ag.targetX = nextWp.tx;
+          ag.targetY = nextWp.ty;
+        }
+
+        ag.bubbleTimer += dt;
+        if (ag.bubbleTimer >= 3.2) {
+          ag.bubbleTimer = 0;
+          ag.bubbleIndex = (ag.bubbleIndex + 1) % spec.idleTexts.length;
+        }
+
+        const bobY = isMoving
+          ? Math.abs(Math.sin(ag.stepPhase)) * -3.5
+          : isWorkerActive
+            ? Math.sin(now / 140) * -1.8
+            : 0;
+
+        const px = ag.x;
+        const py = ag.y + bobY;
+
+        // Bayangan
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.16)';
+        ctx.beginPath();
+        ctx.ellipse(ag.x, ag.y + 18, 11, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Kaki berjalan
+        const legSwing = isMoving ? Math.sin(ag.stepPhase) * 5 : 0;
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(px - 4, py + 7);
+        ctx.lineTo(px - 4 + legSwing, py + 17);
+        ctx.moveTo(px + 4, py + 7);
+        ctx.lineTo(px + 4 - legSwing, py + 17);
+        ctx.stroke();
+
+        // Badan
+        ctx.fillStyle = spec.shirtColor;
+        drawRoundedRect(ctx, px - 8, py - 5, 16, 13, 4);
+        ctx.fill();
+
+        // Tangan
+        const armSwing = isMoving ? -legSwing * 0.7 : isWorkerActive ? Math.cos(now / 110) * 3 : 0;
+        ctx.strokeStyle = '#fcd34d';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(px - 8, py - 2);
+        ctx.lineTo(px - 12, py + 4 + armSwing);
+        ctx.moveTo(px + 8, py - 2);
+        ctx.lineTo(px + 12, py + 4 - armSwing);
+        ctx.stroke();
+
+        // Kepala
+        ctx.fillStyle = '#fde68a';
+        drawRoundedRect(ctx, px - 7.5, py - 19, 15, 14, 5);
+        ctx.fill();
+        ctx.strokeStyle = '#d97706';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Rambut
+        ctx.fillStyle = spec.hairColor;
+        ctx.fillRect(px - 7.5, py - 20, 15, 4.5);
+
+        // Mata
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(px - 4, py - 13, 2, 2.2);
+        ctx.fillRect(px + 2, py - 13, 2, 2.2);
+
+        // Label nama pekerja di bawah kaki
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(spec.roleTitle, px, py + 28);
+
+        // Speech bubble tugas di atas kepala
+        let bubbleText = spec.idleTexts[ag.bubbleIndex];
+        if (isWorkerActive) {
+          bubbleText =
+            idx === 1 && chDone > 0
+              ? `Bab ${chDone}/${totCh}${lw ? ` (${lw}k)` : ''}`
+              : spec.workText;
+        } else if (working) {
+          bubbleText = 'Siaga di meja';
+        }
+
+        ctx.font = 'bold 9.5px sans-serif';
+        const textW = Math.min(148, ctx.measureText(bubbleText).width + 12);
+        const bx = Math.max(8, Math.min(logicalW - textW - 8, px - textW / 2));
+        const by = Math.max(6, py - 42);
+
+        ctx.fillStyle = isWorkerActive ? '#0f172a' : '#ffffff';
+        drawRoundedRect(ctx, bx, by, textW, 18, 9);
+        ctx.fill();
+        ctx.strokeStyle = isWorkerActive ? '#0f172a' : '#94a3b8';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        ctx.fillStyle = isWorkerActive ? '#ffffff' : '#0f172a';
+        ctx.fillText(bubbleText, bx + textW / 2, by + 12);
+      });
+
+      ctx.restore();
+      rafId = requestAnimationFrame(renderFrame);
+    };
+
+    rafId = requestAnimationFrame(renderFrame);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
   return (
-    <div className={`cn-floor-panel ${isAnyWorking ? 'is-busy' : 'is-idle'}`}>
-      <div className="cn-floor-head">
-        <div>
-          <strong>Ruang 5 Pekerja CuanNovel</strong>
-          <span className="cn-floor-sub">
-            {isAnyWorking
-              ? `Pekerja aktif di stasiun #${activeStageIdx + 1} (${WORKER_ROLES[activeStageIdx]?.roleTitle}) — pekerja lain bersiaga.`
-              : 'Tidak ada kerjaan berjalan — semua 5 pekerja mondar-mandir santai di ruang kantor.'}
-          </span>
-        </div>
-        <span className={`cn-floor-chip ${isAnyWorking ? 'chip-work' : 'chip-idle'}`}>
-          {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE MONDAR-MANDIR (IDLE)'}
-        </span>
-      </div>
-
-      <div className="cn-floor-stage">
-        {WORKER_ROLES.map((w, idx) => {
-          const workingHere = isAnyWorking && idx === activeStageIdx;
-          const roamingNow = !isAnyWorking;
-          const bubbleText = workingHere
-            ? getDynamicWorkText(idx, w.workBubble)
-            : roamingNow
-              ? w.idleBubble
-              : 'Siaga di meja';
-
-          return (
-            <div
-              key={w.key}
-              className={`cn-worker-lane ${workingHere ? 'is-working-lane' : ''} ${
-                roamingNow ? w.roamAnimClass : ''
-              }`}
-            >
-              <div className={`cn-speech-bubble ${workingHere ? 'bubble-active' : ''}`}>
-                {bubbleText}
-              </div>
-
-              <div className="cn-worker-visual">
-                <WorkerCharacterSvg
-                  workerIndex={idx}
-                  shirtColor={w.shirtColor}
-                  hairColor={w.hairColor}
-                  workingHere={workingHere}
-                  roamingNow={roamingNow}
-                />
-                {!roamingNow && (
-                  <div className="cn-mini-desk">
-                    <div className="cn-mini-monitor" />
-                  </div>
-                )}
-              </div>
-
-              <div className="cn-worker-tag">
-                <span className="cn-dot" style={{ background: workingHere ? '#10b981' : w.shirtColor }} />
-                <span>{w.roleTitle}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <canvas
+      ref={canvasRef}
+      style={{
+        width: '100%',
+        height: 310,
+        display: 'block',
+        borderRadius: 10,
+        border: '1px solid #cbd5e1'
+      }}
+    />
   );
 };
 
@@ -470,7 +627,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #fecaca;
         }
 
-        /* Panel Ruang 5 Pekerja + Mondar-Mandir */
         .cn-floor-panel {
           background: #ffffff;
           border: 1px solid #cbd5e1;
@@ -488,7 +644,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           justify-content: space-between;
           align-items: center;
           gap: 8px;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
         .cn-floor-sub {
           display: block;
@@ -509,145 +665,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         .chip-idle {
           background: #e0f2fe;
           color: #0369a1;
-        }
-
-        .cn-floor-stage {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(120px, 1fr));
-          gap: 10px;
-          padding: 12px 8px 10px 8px;
-          border-radius: 10px;
-          background: repeating-linear-gradient(
-            90deg,
-            #f8fafc 0px,
-            #f8fafc 36px,
-            #f1f5f9 36px,
-            #f1f5f9 72px
-          );
-          border: 1px dashed #cbd5e1;
-          overflow: hidden;
-        }
-        @media (max-width: 820px) {
-          .cn-floor-stage {
-            grid-template-columns: repeat(2, minmax(140px, 1fr));
-          }
-        }
-
-        .cn-worker-lane {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: space-between;
-          min-height: 118px;
-          padding: 4px;
-          border-radius: 8px;
-        }
-        .cn-worker-lane.is-working-lane {
-          background: rgba(16, 185, 129, 0.12);
-          outline: 1.5px solid #10b981;
-        }
-
-        .cn-speech-bubble {
-          background: #ffffff;
-          border: 1px solid #94a3b8;
-          color: #0f172a;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 3px 7px;
-          border-radius: 999px;
-          white-space: nowrap;
-          max-width: 100%;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08);
-        }
-        .cn-speech-bubble.bubble-active {
-          background: #0f172a;
-          border-color: #0f172a;
-          color: #ffffff;
-        }
-
-        .cn-worker-visual {
-          display: flex;
-          align-items: flex-end;
-          justify-content: center;
-          gap: 2px;
-          margin-top: 4px;
-        }
-        .cn-mini-desk {
-          width: 16px;
-          height: 22px;
-          border-bottom: 3px solid #475569;
-          border-left: 2px solid #94a3b8;
-          display: flex;
-          align-items: flex-start;
-          justify-content: center;
-          padding-top: 2px;
-        }
-        .cn-mini-monitor {
-          width: 10px;
-          height: 8px;
-          background: #38bdf8;
-          border-radius: 1.5px;
-        }
-
-        .cn-worker-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 11px;
-          font-weight: 700;
-          color: #1e293b;
-          margin-top: 4px;
-        }
-        .cn-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 999px;
-          display: inline-block;
-        }
-
-        @keyframes roamLeftRightA {
-          0% { transform: translateX(-10px) scaleX(1); }
-          45% { transform: translateX(14px) scaleX(1); }
-          50% { transform: translateX(14px) scaleX(-1); }
-          95% { transform: translateX(-10px) scaleX(-1); }
-          100% { transform: translateX(-10px) scaleX(1); }
-        }
-        @keyframes roamLeftRightB {
-          0% { transform: translateX(12px) scaleX(-1); }
-          45% { transform: translateX(-12px) scaleX(-1); }
-          50% { transform: translateX(-12px) scaleX(1); }
-          95% { transform: translateX(12px) scaleX(1); }
-          100% { transform: translateX(12px) scaleX(-1); }
-        }
-        @keyframes wkBounce {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-3px); }
-        }
-        @keyframes wkLegSwing {
-          0%, 100% { transform: rotate(-18deg); transform-origin: 23px 40px; }
-          50% { transform: rotate(18deg); transform-origin: 23px 40px; }
-        }
-        @keyframes wkArmSwing {
-          0%, 100% { transform: rotate(-15deg); transform-origin: 18px 29px; }
-          50% { transform: rotate(15deg); transform-origin: 18px 29px; }
-        }
-
-        .roam-a, .roam-c, .roam-e {
-          animation: roamLeftRightA 5.2s ease-in-out infinite;
-        }
-        .roam-b, .roam-d {
-          animation: roamLeftRightB 5.8s ease-in-out infinite;
-        }
-        .wk-work-bounce {
-          animation: wkBounce 0.55s ease-in-out infinite;
-        }
-        .wk-leg-a, .wk-leg-b {
-          animation: wkLegSwing 0.45s ease-in-out infinite;
-        }
-        .wk-arm-work, .wk-arm-work-alt {
-          animation: wkArmSwing 0.35s ease-in-out infinite;
         }
 
         .cn-stations-grid {
@@ -838,16 +855,32 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         </div>
       </div>
 
-      <FiveWorkersOfficeFloor
-        isAnyWorking={isAnyWorking}
-        activeStageIdx={activeStageIdx}
-        lastWords={activeSlot?.lastWords}
-        chaptersDone={activeSlot?.chaptersDone || 0}
-        totalChapters={totalChapters}
-      />
+      <div className={`cn-floor-panel ${isAnyWorking ? 'is-busy' : ''}`}>
+        <div className="cn-floor-head">
+          <div>
+            <strong>Virtual Kantor 5 Pekerja CuanNovel</strong>
+            <span className="cn-floor-sub">
+              {isAnyWorking
+                ? `Pekerja aktif menuju & bekerja di stasiun #${activeStageIdx + 1} (${WORKER_SPECS[activeStageIdx]?.roleTitle}).`
+                : 'Tidak ada kerjaan berjalan — semua 5 pekerja berjalan bebas keliling ruangan.'}
+            </span>
+          </div>
+          <span className={`cn-floor-chip ${isAnyWorking ? 'chip-work' : 'chip-idle'}`}>
+            {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE BERJALAN BEBAS (IDLE)'}
+          </span>
+        </div>
+
+        <VirtualOfficeFloorCanvas
+          isAnyWorking={isAnyWorking}
+          activeStageIdx={activeStageIdx}
+          chaptersDone={activeSlot?.chaptersDone || 0}
+          totalChapters={totalChapters}
+          lastWords={activeSlot?.lastWords}
+        />
+      </div>
 
       <div className="cn-stations-grid">
-        {WORKER_ROLES.map((st, idx) => {
+        {WORKER_SPECS.map((st, idx) => {
           const isDone = activeSlot ? idx < activeStageIdx : false;
           const isCurrent = activeSlot ? idx === activeStageIdx : false;
           const stateLabel = isCurrent
@@ -922,7 +955,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
             </div>
 
             <div style={{ marginTop: 8, fontSize: 12.5, color: '#334155' }}>
-              Tahap berjalan: <strong>{WORKER_ROLES[activeStageIdx]?.shortTitle}</strong>
+              Tahap berjalan: <strong>{WORKER_SPECS[activeStageIdx]?.shortTitle}</strong>
               {typeof activeSlot.lastWords === 'number'
                 ? ` · Bab terakhir: ${activeSlot.lastWords} kata`
                 : ''}
