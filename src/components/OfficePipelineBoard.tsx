@@ -43,6 +43,7 @@ interface WorkerSpec {
   workText: string;
   idleTexts: string[];
   shirtColor: string;
+  shirtShadow: string;
   hairColor: string;
   deskRatioX: number;
   deskRatioY: number;
@@ -55,11 +56,12 @@ const WORKER_SPECS: WorkerSpec[] = [
     shortTitle: 'Riset Proyek',
     roleTitle: 'Riset Novel',
     workText: 'Riset ide & sinopsis',
-    idleTexts: ['Mondar-mandir cari ide', 'Cek tren cerita', 'Jalan santai'],
+    idleTexts: ['Cari ide cerita...', 'Cek tren genre', 'Jalan santai'],
     shirtColor: '#0ea5e9',
+    shirtShadow: '#0369a1',
     hairColor: '#1e293b',
-    deskRatioX: 0.16,
-    deskRatioY: 0.34
+    deskRatioX: 0.2,
+    deskRatioY: 0.42
   },
   {
     key: 'novelku_production',
@@ -67,23 +69,25 @@ const WORKER_SPECS: WorkerSpec[] = [
     shortTitle: 'Tulis Bab',
     roleTitle: 'Penulis Bab',
     workText: 'Menulis bab novel',
-    idleTexts: ['Jalan-jalan cari inspirasi', 'Peregangan sejenak', 'Keliling ruang'],
-    shirtColor: '#2563eb',
+    idleTexts: ['Cari inspirasi...', 'Peregangan dulu', 'Keliling ruang'],
+    shirtColor: '#3b82f6',
+    shirtShadow: '#1d4ed8',
     hairColor: '#7c2d12',
-    deskRatioX: 0.38,
-    deskRatioY: 0.34
+    deskRatioX: 0.5,
+    deskRatioY: 0.42
   },
   {
     key: 'formatting_kdp',
     stationLabel: '3. Audit & Rapikan',
     shortTitle: 'Audit & Rapikan',
     roleTitle: 'Auditor KDP',
-    workText: 'Audit bab & tata letak',
-    idleTexts: ['Mondar-mandir santai', 'Cek catatan KDP', 'Jalan-jalan'],
+    workText: 'Audit bab & layout',
+    idleTexts: ['Cek standar KDP', 'Mondar-mandir', 'Santai sejenak'],
     shirtColor: '#10b981',
+    shirtShadow: '#047857',
     hairColor: '#334155',
-    deskRatioX: 0.6,
-    deskRatioY: 0.34
+    deskRatioX: 0.8,
+    deskRatioY: 0.42
   },
   {
     key: 'cover_generation',
@@ -91,23 +95,25 @@ const WORKER_SPECS: WorkerSpec[] = [
     shortTitle: 'Cover & Kemas Paket',
     roleTitle: 'Desainer Cover',
     workText: 'Desain cover & kemas',
-    idleTexts: ['Jalan-jalan cek warna', 'Istirahat sebentar', 'Mondar-mandir'],
-    shirtColor: '#8b5cf6',
+    idleTexts: ['Cek palet cover', 'Jalan-jalan santai', 'Cuci mata dulu'],
+    shirtColor: '#a855f7',
+    shirtShadow: '#7e22ce',
     hairColor: '#d97706',
-    deskRatioX: 0.28,
-    deskRatioY: 0.68
+    deskRatioX: 0.34,
+    deskRatioY: 0.74
   },
   {
     key: 'gdrive_upload',
     stationLabel: '5. Google Drive',
     shortTitle: 'Google Drive',
     roleTitle: 'Kurir Drive',
-    workText: 'Kirim ke Google Drive',
-    idleTexts: ['Mondar-mandir santai', 'Siap antar file', 'Jalan keliling'],
+    workText: 'Upload ke Drive',
+    idleTexts: ['Siap kirim paket', 'Mondar-mandir', 'Jalan santai'],
     shirtColor: '#f59e0b',
+    shirtShadow: '#b45309',
     hairColor: '#0f172a',
-    deskRatioX: 0.66,
-    deskRatioY: 0.68
+    deskRatioX: 0.68,
+    deskRatioY: 0.74
   }
 ];
 
@@ -202,6 +208,29 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+function drawPottedPlant(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.14)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 12, 11, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#c2410c';
+  drawRoundedRect(ctx, x - 7, y + 1, 14, 11, 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#16a34a';
+  ctx.beginPath();
+  ctx.arc(x - 5, y - 4, 7, 0, Math.PI * 2);
+  ctx.arc(x + 5, y - 4, 7, 0, Math.PI * 2);
+  ctx.arc(x, y - 10, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.arc(x - 2, y - 9, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 const VirtualOfficeFloorCanvas: React.FC<{
   isAnyWorking: boolean;
   activeStageIdx: number;
@@ -233,28 +262,28 @@ const VirtualOfficeFloorCanvas: React.FC<{
     if (!ctx) return;
 
     const agents: RoamAgent[] = WORKER_SPECS.map((w, i) => ({
-      x: 120 + i * 130,
-      y: i < 3 ? 130 : 230,
-      targetX: 160 + ((i * 157) % 520),
-      targetY: i % 2 === 0 ? 115 : 235,
+      x: 130 + i * 145,
+      y: i < 3 ? 175 : 265,
+      targetX: 180 + ((i * 173) % 480),
+      targetY: i % 2 === 0 ? 170 : 265,
       bubbleIndex: i,
       bubbleTimer: 0,
       pauseTimer: 0,
-      stepPhase: i * 1.4
+      stepPhase: i * 1.5
     }));
 
     let rafId = 0;
     let lastTime = performance.now();
 
     const pickNextWaypoint = (idx: number, width: number, height: number): { tx: number; ty: number } => {
-      const minX = Math.max(60, Math.round(width * 0.08));
-      const maxX = Math.max(minX + 80, Math.round(width * 0.92));
-      const minY = Math.max(76, Math.round(height * 0.24));
-      const maxY = Math.max(minY + 60, Math.round(height * 0.86));
+      const minX = Math.max(85, Math.round(width * 0.12));
+      const maxX = Math.max(minX + 100, Math.round(width * 0.88));
+      const minY = Math.max(145, Math.round(height * 0.44));
+      const maxY = Math.max(minY + 60, Math.round(height * 0.84));
 
-      const seed = (idx * 73 + Math.floor(performance.now() / 650)) % 997;
-      const rx = ((seed * 37) % 1000) / 1000;
-      const ry = ((seed * 61) % 1000) / 1000;
+      const seed = (idx * 97 + Math.floor(performance.now() / 700)) % 997;
+      const rx = ((seed * 43) % 1000) / 1000;
+      const ry = ((seed * 67) % 1000) / 1000;
 
       return {
         tx: minX + rx * (maxX - minX),
@@ -266,10 +295,10 @@ const VirtualOfficeFloorCanvas: React.FC<{
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      const parentWidth = canvas.parentElement?.clientWidth || 780;
+      const parentWidth = canvas.parentElement?.clientWidth || 820;
       const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-      const logicalW = Math.max(340, parentWidth);
-      const logicalH = 310;
+      const logicalW = Math.max(360, parentWidth);
+      const logicalH = 340;
 
       if (canvas.width !== Math.round(logicalW * dpr) || canvas.height !== Math.round(logicalH * dpr)) {
         canvas.width = Math.round(logicalW * dpr);
@@ -279,61 +308,118 @@ const VirtualOfficeFloorCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // Latar lantai kantor & karpet area tengah
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(0, 0, logicalW, logicalH);
+      // 1. Dinding atas hangat + jendela cahaya
+      const wallGrad = ctx.createLinearGradient(0, 0, 0, logicalH * 0.28);
+      wallGrad.addColorStop(0, '#e2e8f0');
+      wallGrad.addColorStop(1, '#f8fafc');
+      ctx.fillStyle = wallGrad;
+      ctx.fillRect(0, 0, logicalW, logicalH * 0.28);
 
-      ctx.strokeStyle = '#e2e8f0';
+      // Jendela kantor
+      const winPositions = [logicalW * 0.22, logicalW * 0.5, logicalW * 0.78];
+      winPositions.forEach((wx) => {
+        ctx.fillStyle = '#bae6fd';
+        drawRoundedRect(ctx, wx - 36, 16, 72, 46, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Cahaya matahari masuk
+        ctx.fillStyle = 'rgba(254, 249, 195, 0.32)';
+        ctx.beginPath();
+        ctx.moveTo(wx - 36, 62);
+        ctx.lineTo(wx + 36, 62);
+        ctx.lineTo(wx + 65, logicalH * 0.55);
+        ctx.lineTo(wx - 65, logicalH * 0.55);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      // 2. Lantai kayu hangat + papan garis parket
+      const floorGrad = ctx.createLinearGradient(0, logicalH * 0.26, 0, logicalH);
+      floorGrad.addColorStop(0, '#f3e5ab');
+      floorGrad.addColorStop(1, '#e6cfa0');
+      ctx.fillStyle = floorGrad;
+      ctx.fillRect(0, logicalH * 0.26, logicalW, logicalH * 0.74);
+
+      ctx.strokeStyle = 'rgba(146, 64, 14, 0.14)';
       ctx.lineWidth = 1;
-      for (let gx = 0; gx < logicalW; gx += 36) {
+      for (let py = logicalH * 0.28; py < logicalH; py += 26) {
         ctx.beginPath();
-        ctx.moveTo(gx, 0);
-        ctx.lineTo(gx, logicalH);
-        ctx.stroke();
-      }
-      for (let gy = 0; gy < logicalH; gy += 36) {
-        ctx.beginPath();
-        ctx.moveTo(0, gy);
-        ctx.lineTo(logicalW, gy);
+        ctx.moveTo(0, py);
+        ctx.lineTo(logicalW, py);
         ctx.stroke();
       }
 
-      const rugX = logicalW * 0.07;
-      const rugY = logicalH * 0.2;
-      const rugW = logicalW * 0.86;
-      const rugH = logicalH * 0.7;
-      ctx.fillStyle = '#dbeafe';
-      drawRoundedRect(ctx, rugX, rugY, rugW, rugH, 14);
+      // 3. Karpet ruang kerja biru tua berbingkai
+      const rugX = logicalW * 0.06;
+      const rugY = logicalH * 0.31;
+      const rugW = logicalW * 0.88;
+      const rugH = logicalH * 0.62;
+      const rugGrad = ctx.createLinearGradient(0, rugY, 0, rugY + rugH);
+      rugGrad.addColorStop(0, '#1e3a8a');
+      rugGrad.addColorStop(1, '#172554');
+      ctx.fillStyle = rugGrad;
+      drawRoundedRect(ctx, rugX, rugY, rugW, rugH, 16);
       ctx.fill();
-      ctx.strokeStyle = '#93c5fd';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Gambar 5 meja kerja + monitor
+      // Tanaman hias di sudut
+      drawPottedPlant(ctx, rugX + 26, rugY + 24);
+      drawPottedPlant(ctx, rugX + rugW - 26, rugY + 24);
+
+      const {
+        isAnyWorking: working,
+        activeStageIdx: activeIdx,
+        chaptersDone: chDone,
+        totalChapters: totCh,
+        lastWords: lw
+      } = stateRef.current;
+
+      // 4. Gambar 5 meja kerja + monitor berwarna
       WORKER_SPECS.forEach((w, idx) => {
         const dx = w.deskRatioX * logicalW;
         const dy = w.deskRatioY * logicalH;
-        const isFocus = stateRef.current.isAnyWorking && idx === stateRef.current.activeStageIdx;
+        const isFocus = working && idx === activeIdx;
 
-        ctx.fillStyle = isFocus ? '#fef3c7' : '#ffffff';
-        drawRoundedRect(ctx, dx - 28, dy - 10, 56, 22, 5);
+        // Bayangan meja
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        drawRoundedRect(ctx, dx - 32, dy - 7, 64, 24, 6);
         ctx.fill();
-        ctx.strokeStyle = isFocus ? '#d97706' : '#94a3b8';
-        ctx.lineWidth = isFocus ? 2 : 1.3;
+
+        // Permukaan meja kayu
+        ctx.fillStyle = isFocus ? '#fde68a' : '#d97706';
+        drawRoundedRect(ctx, dx - 32, dy - 10, 64, 22, 6);
+        ctx.fill();
+        ctx.strokeStyle = isFocus ? '#f59e0b' : '#92400e';
+        ctx.lineWidth = isFocus ? 2.5 : 1.5;
         ctx.stroke();
 
-        // Layar monitor kecil
+        // Monitor
         ctx.fillStyle = '#0f172a';
-        drawRoundedRect(ctx, dx - 10, dy - 18, 20, 11, 2);
+        drawRoundedRect(ctx, dx - 12, dy - 21, 24, 13, 2.5);
         ctx.fill();
-        ctx.fillStyle = isFocus ? '#34d399' : '#38bdf8';
-        ctx.fillRect(dx - 8, dy - 16, 16, 7);
+
+        ctx.fillStyle = isFocus ? '#4ade80' : '#38bdf8';
+        ctx.fillRect(dx - 9.5, dy - 18.5, 19, 8);
+
+        // Cahaya layar ke meja saat aktif
+        if (isFocus) {
+          ctx.fillStyle = 'rgba(74, 222, 128, 0.22)';
+          ctx.beginPath();
+          ctx.moveTo(dx - 10, dy - 10);
+          ctx.lineTo(dx + 10, dy - 10);
+          ctx.lineTo(dx + 22, dy + 10);
+          ctx.lineTo(dx - 22, dy + 10);
+          ctx.closePath();
+          ctx.fill();
+        }
       });
 
-      const { isAnyWorking: working, activeStageIdx: activeIdx, chaptersDone: chDone, totalChapters: totCh, lastWords: lw } =
-        stateRef.current;
-
-      // Update posisi & gambar 5 pekerja
+      // 5. Update pergerakan & jarak aman antar pekerja
       agents.forEach((ag, idx) => {
         const spec = WORKER_SPECS[idx];
         const isWorkerActive = working && idx === activeIdx;
@@ -343,9 +429,9 @@ const VirtualOfficeFloorCanvas: React.FC<{
 
         if (isWorkerActive) {
           goalX = spec.deskRatioX * logicalW;
-          goalY = spec.deskRatioY * logicalH + 22;
+          goalY = spec.deskRatioY * logicalH + 24;
         } else if (working) {
-          goalX = spec.deskRatioX * logicalW + 18;
+          goalX = spec.deskRatioX * logicalW + 22;
           goalY = spec.deskRatioY * logicalH + 26;
         }
 
@@ -356,93 +442,136 @@ const VirtualOfficeFloorCanvas: React.FC<{
         let isMoving = false;
         if (ag.pauseTimer > 0) {
           ag.pauseTimer -= dt;
-        } else if (dist > 3) {
-          const speed = isWorkerActive ? 95 : 54;
+        } else if (dist > 4) {
+          const speed = isWorkerActive ? 105 : 52;
           const step = Math.min(dist, speed * dt);
           ag.x += (dx / dist) * step;
           ag.y += (dy / dist) * step;
-          ag.stepPhase += dt * 9;
+          ag.stepPhase += dt * 9.5;
           isMoving = true;
         } else if (!working) {
-          ag.pauseTimer = 0.65;
+          ag.pauseTimer = 0.7;
           const nextWp = pickNextWaypoint(idx, logicalW, logicalH);
           ag.targetX = nextWp.tx;
           ag.targetY = nextWp.ty;
         }
+
+        // Tolak-menolak halus agar tidak saling menumpuk saat mondar-mandir
+        if (!working) {
+          agents.forEach((other, j) => {
+            if (idx === j) return;
+            const ox = ag.x - other.x;
+            const oy = ag.y - other.y;
+            const odist = Math.hypot(ox, oy);
+            const minSep = 74;
+            if (odist > 0.1 && odist < minSep) {
+              const push = ((minSep - odist) / minSep) * 48 * dt;
+              ag.x += (ox / odist) * push;
+              ag.y += (oy / odist) * push;
+            }
+          });
+        }
+
+        ag.x = Math.max(rugX + 26, Math.min(rugX + rugW - 26, ag.x));
+        ag.y = Math.max(rugY + 42, Math.min(rugY + rugH - 18, ag.y));
 
         ag.bubbleTimer += dt;
         if (ag.bubbleTimer >= 3.2) {
           ag.bubbleTimer = 0;
           ag.bubbleIndex = (ag.bubbleIndex + 1) % spec.idleTexts.length;
         }
+      });
+
+      // Urutkan gambar berdasarkan posisi Y agar karakter depan/belakang terlihat alami
+      const drawOrder = agents
+        .map((ag, idx) => ({ ag, idx }))
+        .sort((a, b) => a.ag.y - b.ag.y);
+
+      const placedBubbles: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+      drawOrder.forEach(({ ag, idx }) => {
+        const spec = WORKER_SPECS[idx];
+        const isWorkerActive = working && idx === activeIdx;
+        const isMoving = Math.hypot(ag.targetX - ag.x, ag.targetY - ag.y) > 4 && !working;
 
         const bobY = isMoving
           ? Math.abs(Math.sin(ag.stepPhase)) * -3.5
           : isWorkerActive
-            ? Math.sin(now / 140) * -1.8
+            ? Math.sin(now / 130) * -2
             : 0;
 
         const px = ag.x;
         const py = ag.y + bobY;
 
-        // Bayangan
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.16)';
+        // Bayangan karakter
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
         ctx.beginPath();
-        ctx.ellipse(ag.x, ag.y + 18, 11, 3.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(ag.x, ag.y + 18, 12, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Kaki berjalan
-        const legSwing = isMoving ? Math.sin(ag.stepPhase) * 5 : 0;
+        // Kaki & sepatu
+        const legSwing = isMoving ? Math.sin(ag.stepPhase) * 5.5 : 0;
         ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.4;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(px - 4, py + 7);
-        ctx.lineTo(px - 4 + legSwing, py + 17);
-        ctx.moveTo(px + 4, py + 7);
-        ctx.lineTo(px + 4 - legSwing, py + 17);
+        ctx.moveTo(px - 4.5, py + 7);
+        ctx.lineTo(px - 4.5 + legSwing, py + 17);
+        ctx.moveTo(px + 4.5, py + 7);
+        ctx.lineTo(px + 4.5 - legSwing, py + 17);
         ctx.stroke();
 
-        // Badan
+        // Badan kemeja berwarna
         ctx.fillStyle = spec.shirtColor;
-        drawRoundedRect(ctx, px - 8, py - 5, 16, 13, 4);
+        drawRoundedRect(ctx, px - 9, py - 6, 18, 14, 4.5);
         ctx.fill();
+        ctx.strokeStyle = spec.shirtShadow;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
 
         // Tangan
-        const armSwing = isMoving ? -legSwing * 0.7 : isWorkerActive ? Math.cos(now / 110) * 3 : 0;
+        const armSwing = isMoving ? -legSwing * 0.75 : isWorkerActive ? Math.cos(now / 100) * 3.5 : 0;
         ctx.strokeStyle = '#fcd34d';
-        ctx.lineWidth = 2.6;
+        ctx.lineWidth = 2.8;
         ctx.beginPath();
-        ctx.moveTo(px - 8, py - 2);
-        ctx.lineTo(px - 12, py + 4 + armSwing);
-        ctx.moveTo(px + 8, py - 2);
-        ctx.lineTo(px + 12, py + 4 - armSwing);
+        ctx.moveTo(px - 9, py - 2);
+        ctx.lineTo(px - 13, py + 4 + armSwing);
+        ctx.moveTo(px + 9, py - 2);
+        ctx.lineTo(px + 13, py + 4 - armSwing);
         ctx.stroke();
 
         // Kepala
         ctx.fillStyle = '#fde68a';
-        drawRoundedRect(ctx, px - 7.5, py - 19, 15, 14, 5);
+        drawRoundedRect(ctx, px - 8, py - 21, 16, 15, 5.5);
         ctx.fill();
         ctx.strokeStyle = '#d97706';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.2;
         ctx.stroke();
 
         // Rambut
         ctx.fillStyle = spec.hairColor;
-        ctx.fillRect(px - 7.5, py - 20, 15, 4.5);
+        drawRoundedRect(ctx, px - 8.2, py - 22.5, 16.4, 5.5, 3);
+        ctx.fill();
 
         // Mata
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(px - 4, py - 13, 2, 2.2);
-        ctx.fillRect(px + 2, py - 13, 2, 2.2);
+        ctx.beginPath();
+        ctx.arc(px - 3.5, py - 13.5, 1.5, 0, Math.PI * 2);
+        ctx.arc(px + 3.5, py - 13.5, 1.5, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Label nama pekerja di bawah kaki
+        // Badge nama peran di bawah kaki
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
+        const tagText = spec.roleTitle;
+        const tagW = ctx.measureText(tagText).width + 10;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        drawRoundedRect(ctx, px - tagW / 2, py + 21, tagW, 14, 7);
+        ctx.fill();
         ctx.fillStyle = '#0f172a';
-        ctx.fillText(spec.roleTitle, px, py + 28);
+        ctx.fillText(tagText, px, py + 31);
 
-        // Speech bubble tugas di atas kepala
+        // Speech bubble anti-tumpuk di atas kepala
         let bubbleText = spec.idleTexts[ag.bubbleIndex];
         if (isWorkerActive) {
           bubbleText =
@@ -450,23 +579,38 @@ const VirtualOfficeFloorCanvas: React.FC<{
               ? `Bab ${chDone}/${totCh}${lw ? ` (${lw}k)` : ''}`
               : spec.workText;
         } else if (working) {
-          bubbleText = 'Siaga di meja';
+          bubbleText = 'Siaga';
         }
 
         ctx.font = 'bold 9.5px sans-serif';
-        const textW = Math.min(148, ctx.measureText(bubbleText).width + 12);
-        const bx = Math.max(8, Math.min(logicalW - textW - 8, px - textW / 2));
-        const by = Math.max(6, py - 42);
+        const textW = Math.min(144, ctx.measureText(bubbleText).width + 14);
+        const bh = 19;
+        let bx = Math.max(8, Math.min(logicalW - textW - 8, px - textW / 2));
+        let by = Math.max(8, py - 45);
+
+        // Geser ke atas jika beririsan dengan bubble lain
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const overlaps = placedBubbles.some(
+            (b) =>
+              bx < b.x + b.w + 4 &&
+              bx + textW + 4 > b.x &&
+              by < b.y + b.h + 3 &&
+              by + bh + 3 > b.y
+          );
+          if (!overlaps) break;
+          by = Math.max(6, by - 21);
+        }
+        placedBubbles.push({ x: bx, y: by, w: textW, h: bh });
 
         ctx.fillStyle = isWorkerActive ? '#0f172a' : '#ffffff';
-        drawRoundedRect(ctx, bx, by, textW, 18, 9);
+        drawRoundedRect(ctx, bx, by, textW, bh, 9.5);
         ctx.fill();
-        ctx.strokeStyle = isWorkerActive ? '#0f172a' : '#94a3b8';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = isWorkerActive ? '#34d399' : '#64748b';
+        ctx.lineWidth = isWorkerActive ? 1.6 : 1.2;
         ctx.stroke();
 
         ctx.fillStyle = isWorkerActive ? '#ffffff' : '#0f172a';
-        ctx.fillText(bubbleText, bx + textW / 2, by + 12);
+        ctx.fillText(bubbleText, bx + textW / 2, by + 12.5);
       });
 
       ctx.restore();
@@ -482,10 +626,11 @@ const VirtualOfficeFloorCanvas: React.FC<{
       ref={canvasRef}
       style={{
         width: '100%',
-        height: 310,
+        height: 340,
         display: 'block',
-        borderRadius: 10,
-        border: '1px solid #cbd5e1'
+        borderRadius: 12,
+        border: '1px solid #cbd5e1',
+        boxShadow: 'inset 0 2px 8px rgba(15, 23, 42, 0.08)'
       }}
     />
   );
