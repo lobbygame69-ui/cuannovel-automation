@@ -375,7 +375,6 @@ function splitIntoParagraphs(content: string): string[] {
 
 function estimateChapterPages(content: string): number {
   const words = countWords(content);
-  // sekitar 260 kata per halaman ukuran 6x9 inci
   return Math.max(3, Math.ceil(words / 260));
 }
 
@@ -388,14 +387,15 @@ function buildInteriorHtml(
   const sortedChapters = [...chapters].sort((a, b) => a.chapter_number - b.chapter_number);
   const yearNow = new Date().getFullYear();
 
-  // Lembar 1 = hlm 1, Balik Lembar 1 = hlm 2, Lembar 2 = hlm 3, Lembar 3 = hlm 4, Bab 1 mulai hlm 5
   let runningPage = 5;
   const tocEntries = sortedChapters.map((ch) => {
     const startPage = runningPage;
     const pagesUsed = estimateChapterPages(ch.content);
     runningPage += pagesUsed;
     const cleanTitle = cleanChapterTitle(ch.title, ch.chapter_number, isEn);
-    const label = isEn ? `Chapter ${ch.chapter_number}: ${cleanTitle}` : `Bab ${ch.chapter_number}: ${cleanTitle}`;
+    const label = isEn
+      ? `Chapter ${ch.chapter_number}: ${cleanTitle}`
+      : `Bab ${ch.chapter_number}: ${cleanTitle}`;
     return {
       ch,
       cleanTitle,
@@ -407,7 +407,7 @@ function buildInteriorHtml(
   const tocRows = tocEntries
     .map(
       (entry) =>
-        `<div class="toc-row"><span class="toc-label">${escapeHtml(entry.label)}</span><span class="toc-dots"></span><span class="toc-page">${entry.startPage}</span></div>`
+        `<div class="toc-row"><span class="toc-label">${escapeHtml(entry.label)}</span><span class="toc-page">${entry.startPage}</span></div>`
     )
     .join('\n');
 
@@ -456,9 +456,6 @@ function buildInteriorHtml(
       const paragraphs = splitIntoParagraphs(ch.content)
         .map((p) => `<p>${escapeHtml(p)}</p>`)
         .join('\n');
-      const heading = isEn
-        ? `Chapter ${ch.chapter_number}: ${escapeHtml(cleanTitle)}`
-        : `Bab ${ch.chapter_number}: ${escapeHtml(cleanTitle)}`;
       return `
         <article class="book-sheet chapter-sheet" data-page="${startPage}">
           <div class="running-header">${escapeHtml(project.title)}</div>
@@ -484,11 +481,7 @@ function buildInteriorHtml(
     size: 6in 9in;
     margin: 0.75in 0.75in 0.8in 0.75in;
   }
-
-  * {
-    box-sizing: border-box;
-  }
-
+  * { box-sizing: border-box; }
   body {
     margin: 0;
     padding: 24px 12px;
@@ -497,7 +490,6 @@ function buildInteriorHtml(
     color: #18181b;
     line-height: 1.72;
   }
-
   .book-sheet {
     width: 6in;
     min-height: 9in;
@@ -511,172 +503,59 @@ function buildInteriorHtml(
     break-after: page;
     page-break-after: always;
   }
-
-  .book-sheet:first-child {
-    break-before: auto;
-    page-break-before: auto;
-  }
-
-  .book-sheet:last-child {
-    break-after: auto;
-    page-break-after: auto;
-  }
-
+  .book-sheet:first-child { break-before: auto; page-break-before: auto; }
+  .book-sheet:last-child { break-after: auto; page-break-after: auto; }
   @media print {
-    body {
-      background: #ffffff;
-      padding: 0;
-    }
+    body { background: #ffffff; padding: 0; }
     .book-sheet {
-      width: auto;
-      min-height: auto;
-      margin: 0;
-      padding: 0;
-      box-shadow: none;
-      break-after: auto;
-      page-break-after: auto;
+      width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none;
+      break-after: auto; page-break-after: auto;
     }
-    .running-header,
-    .running-footer {
-      display: none;
-    }
+    .running-header, .running-footer { display: none; }
   }
-
   .title-sheet {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    min-height: 7.4in;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; min-height: 7.4in;
   }
-
   .book-title-main {
-    font-size: 24pt;
-    line-height: 1.25;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    margin: 0 0 18px 0;
-    color: #0f172a;
+    font-size: 24pt; line-height: 1.25; font-weight: 700; letter-spacing: 0.3px;
+    margin: 0 0 18px 0; color: #0f172a;
   }
-
-  .title-divider {
-    width: 64px;
-    height: 2px;
-    background: #94a3b8;
-    margin: 10px auto 18px auto;
-  }
-
+  .title-divider { width: 64px; height: 2px; background: #94a3b8; margin: 10px auto 18px auto; }
   .book-author-main {
-    font-size: 13pt;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    margin: 0 0 8px 0;
-    color: #1e293b;
+    font-size: 13pt; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+    margin: 0 0 8px 0; color: #1e293b;
   }
-
-  .book-publisher-sub {
-    font-size: 10pt;
-    color: #64748b;
-    margin-top: 6px;
+  .book-publisher-sub { font-size: 10pt; color: #64748b; margin-top: 6px; }
+  .meta-heading, .section-heading {
+    font-size: 15pt; font-weight: 700; margin: 0 0 16px 0; padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0; color: #0f172a;
   }
-
-  .meta-heading,
-  .section-heading {
-    font-size: 15pt;
-    font-weight: 700;
-    margin: 0 0 16px 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e2e8f0;
-    color: #0f172a;
-  }
-
   .chapter-number-label {
-    font-size: 9pt;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #64748b;
-    margin-bottom: 4px;
+    font-size: 9pt; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin-bottom: 4px;
   }
-
   .chapter-title {
-    font-size: 16pt;
-    font-weight: 700;
-    line-height: 1.3;
-    margin: 0 0 18px 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e2e8f0;
-    color: #0f172a;
+    font-size: 16pt; font-weight: 700; line-height: 1.3; margin: 0 0 18px 0; padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0; color: #0f172a;
   }
-
-  p {
-    font-size: 10.5pt;
-    line-height: 1.72;
-    margin: 0 0 9px 0;
-    text-indent: 1.35em;
-    text-align: justify;
-  }
-
-  p.no-indent {
-    text-indent: 0;
-    text-align: left;
-    margin-bottom: 11px;
-  }
-
-  p.signature {
-    text-indent: 0;
-    text-align: left;
-    font-style: italic;
-    margin-top: 18px;
-    font-weight: 600;
-  }
-
-  .toc-list {
-    margin-top: 10px;
-  }
-
+  p { font-size: 10.5pt; line-height: 1.72; margin: 0 0 9px 0; text-indent: 1.35em; text-align: justify; }
+  p.no-indent { text-indent: 0; text-align: left; margin-bottom: 11px; }
+  p.signature { text-indent: 0; text-align: left; font-style: italic; margin-top: 18px; font-weight: 600; }
+  .toc-list { margin-top: 10px; }
   .toc-row {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 7px 0;
-    border-bottom: 1px dotted #cbd5e1;
-    font-size: 10.5pt;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px dotted #cbd5e1; font-size: 10.5pt;
   }
-
-  .toc-label {
-    flex: 1;
-    color: #0f172a;
-  }
-
-  .toc-page {
-    font-weight: 700;
-    color: #334155;
-    min-width: 28px;
-    text-align: right;
-  }
-
-  .running-header {
-    font-size: 8.5pt;
-    color: #64748b;
-    text-align: center;
-    margin-bottom: 14px;
-    letter-spacing: 0.4px;
-  }
-
+  .toc-label { flex: 1; color: #0f172a; }
+  .toc-page { font-weight: 700; color: #334155; min-width: 28px; text-align: right; }
+  .running-header { font-size: 8.5pt; color: #64748b; text-align: center; margin-bottom: 14px; letter-spacing: 0.4px; }
   .running-footer {
-    margin-top: 22px;
-    padding-top: 10px;
-    border-top: 1px solid #f1f5f9;
-    text-align: center;
-    font-size: 9.5pt;
-    color: #475569;
+    margin-top: 22px; padding-top: 10px; border-top: 1px solid #f1f5f9;
+    text-align: center; font-size: 9.5pt; color: #475569;
   }
 </style>
 </head>
 <body>
-  <!-- Lembar 1: Halaman Judul & Penulis -->
   <section class="book-sheet title-sheet" data-page="1">
     <h1 class="book-title-main">${escapeHtml(project.title)}</h1>
     <div class="title-divider"></div>
@@ -684,17 +563,14 @@ function buildInteriorHtml(
     <div class="book-publisher-sub">${escapeHtml(batch.publisher_name)}</div>
   </section>
 
-  <!-- Balik Lembar 1: Copyright sesuai bahasa novel -->
   <section class="book-sheet" data-page="2">
     ${copyrightBlock}
   </section>
 
-  <!-- Lembar 2: Ucapan Terima Kasih Pembuka -->
   <section class="book-sheet" data-page="3">
     ${openingAck}
   </section>
 
-  <!-- Lembar 3: Daftar Isi & Nomor Halaman -->
   <section class="book-sheet" data-page="4">
     <div class="section-heading">${isEn ? 'Table of Contents' : 'Daftar Isi'}</div>
     <div class="toc-list">
@@ -702,10 +578,8 @@ function buildInteriorHtml(
     </div>
   </section>
 
-  <!-- Isi Bab Buku -->
   ${chapterHtml}
 
-  <!-- Lembar Terakhir: Ucapan Terima Kasih untuk Pembaca -->
   <section class="book-sheet" data-page="${runningPage}">
     ${closingAck}
   </section>
@@ -744,119 +618,126 @@ function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[
   return lines;
 }
 
-function buildFrontIllustrationSvg(x: number, y: number, w: number, h: number, idPrefix: string): string {
-  const cx = x + Math.round(w * 0.5);
-  const horizonY = y + Math.round(h * 0.62);
-  const baseY = y + h;
-  const lighthouseX = cx;
-  const lighthouseTopY = horizonY - Math.round(h * 0.24);
+async function fetchCoverIllustrationDataUri(
+  promptText: string,
+  width: number,
+  height: number
+): Promise<string | null> {
+  const customEndpoint = getEnv('COVER_IMAGE_API_URL');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-  return `
-    <g id="${idPrefix}-front-art">
-      <defs>
-        <linearGradient id="${idPrefix}-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#071326"/>
-          <stop offset="55%" stop-color="#13294b"/>
-          <stop offset="100%" stop-color="#29486b"/>
-        </linearGradient>
-        <linearGradient id="${idPrefix}-sea" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#0f2942"/>
-          <stop offset="100%" stop-color="#061220"/>
-        </linearGradient>
-        <radialGradient id="${idPrefix}-beam" cx="50%" cy="50%" r="55%">
-          <stop offset="0%" stop-color="#fde68a" stop-opacity="0.72"/>
-          <stop offset="55%" stop-color="#f59e0b" stop-opacity="0.22"/>
-          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-        </radialGradient>
-        <linearGradient id="${idPrefix}-scrim" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#040b16" stop-opacity="0.82"/>
-          <stop offset="35%" stop-color="#040b16" stop-opacity="0.38"/>
-          <stop offset="72%" stop-color="#040b16" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#040b16" stop-opacity="0.88"/>
-        </linearGradient>
-      </defs>
+  try {
+    if (customEndpoint) {
+      const res = await fetch(customEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText, width, height }),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || 'image/jpeg';
+        if (ct.includes('image/')) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          return `data:${ct};base64,${buf.toString('base64')}`;
+        }
+        const json = (await res.json().catch(() => null)) as { imageBase64?: string; url?: string } | null;
+        if (json?.imageBase64) {
+          return `data:image/png;base64,${json.imageBase64}`;
+        }
+        if (json?.url) {
+          return json.url;
+        }
+      }
+    }
 
-      <!-- Langit & Laut Penuh -->
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-sky)"/>
-      <circle cx="${cx + Math.round(w * 0.22)}" cy="${y + Math.round(h * 0.2)}" r="${Math.round(w * 0.075)}" fill="#fef3c7" opacity="0.85"/>
-
-      <!-- Cahaya Suar Mercusuar -->
-      <ellipse cx="${lighthouseX}" cy="${lighthouseTopY + 24}" rx="${Math.round(w * 0.44)}" ry="${Math.round(h * 0.14)}" fill="url(#${idPrefix}-beam)"/>
-
-      <!-- Lautan & Ombak -->
-      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="url(#${idPrefix}-sea)"/>
-      <path d="M ${x} ${horizonY + 28} Q ${cx - Math.round(w * 0.25)} ${horizonY - 12}, ${cx} ${horizonY + 24} T ${x + w} ${horizonY + 22} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#173a5e" opacity="0.65"/>
-      <path d="M ${x} ${horizonY + Math.round(h * 0.11)} Q ${cx - Math.round(w * 0.2)} ${horizonY + Math.round(h * 0.07)}, ${cx} ${horizonY + Math.round(h * 0.12)} T ${x + w} ${horizonY + Math.round(h * 0.11)} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#0b1f33" opacity="0.8"/>
-
-      <!-- Tebing Batu & Siluet Mercusuar -->
-      <polygon points="${x},${baseY} ${x},${horizonY - 18} ${cx - Math.round(w * 0.16)},${horizonY + 12} ${cx + Math.round(w * 0.2)},${horizonY + 48} ${x + w},${horizonY + 24} ${x + w},${baseY}" fill="#09111e"/>
-      <polygon points="${lighthouseX - 34},${horizonY + 8} ${lighthouseX + 34},${horizonY + 8} ${lighthouseX + 18},${lighthouseTopY + 34} ${lighthouseX - 18},${lighthouseTopY + 34}" fill="#e2e8f0" opacity="0.9"/>
-      <rect x="${lighthouseX - 24}" y="${lighthouseTopY + 10}" width="48" height="24" rx="4" fill="#fde047"/>
-      <polygon points="${lighthouseX - 28},${lighthouseTopY + 10} ${lighthouseX},${lighthouseTopY - 22} ${lighthouseX + 28},${lighthouseTopY + 10}" fill="#0f172a"/>
-
-      <!-- Gradasi pelindung kontras agar judul & nama penulis jelas terbaca -->
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-scrim)"/>
-    </g>
-  `;
+    const encodedPrompt = encodeURIComponent(promptText.slice(0, 500));
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true`;
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    const ct = res.headers.get('content-type') || 'image/jpeg';
+    if (!ct.includes('image/')) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 1000) return null;
+    return `data:${ct};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
-function buildBackIllustrationSvg(
+function buildRichFallbackArtSvg(
   x: number,
   y: number,
   w: number,
   h: number,
   idPrefix: string,
-  barcodeX: number,
-  barcodeY: number,
-  barcodeW: number,
-  barcodeH: number
+  variant: 'front' | 'back'
 ): string {
   const cx = x + Math.round(w * 0.5);
-  const horizonY = y + Math.round(h * 0.68);
+  const horizonY = y + Math.round(h * 0.63);
   const baseY = y + h;
 
+  if (variant === 'front') {
+    const towerTop = horizonY - Math.round(h * 0.25);
+    return `
+      <g>
+        <defs>
+          <linearGradient id="${idPrefix}-fsky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#091326"/>
+            <stop offset="50%" stop-color="#221e46"/>
+            <stop offset="100%" stop-color="#6b3e26"/>
+          </linearGradient>
+          <radialGradient id="${idPrefix}-fglow" cx="50%" cy="50%" r="55%">
+            <stop offset="0%" stop-color="#fde68a" stop-opacity="0.72"/>
+            <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-fsky)"/>
+        <ellipse cx="${cx}" cy="${towerTop + 25}" rx="${Math.round(w * 0.45)}" ry="${Math.round(h * 0.16)}" fill="url(#${idPrefix}-fglow)"/>
+        <polygon points="${x + Math.round(w * 0.08)},${horizonY} ${x + Math.round(w * 0.16)},${horizonY - Math.round(h * 0.14)} ${x + Math.round(w * 0.24)},${horizonY}" fill="#111827" opacity="0.75"/>
+        <polygon points="${x + Math.round(w * 0.75)},${horizonY} ${x + Math.round(w * 0.84)},${horizonY - Math.round(h * 0.16)} ${x + Math.round(w * 0.93)},${horizonY}" fill="#111827" opacity="0.75"/>
+        <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#081424"/>
+        <polygon points="${x},${baseY} ${x},${horizonY - 12} ${cx - Math.round(w * 0.14)},${horizonY + 18} ${cx + Math.round(w * 0.2)},${horizonY + 42} ${x + w},${horizonY + 16} ${x + w},${baseY}" fill="#070d19"/>
+        <polygon points="${cx - 36},${horizonY + 12} ${cx + 36},${horizonY + 12} ${cx + 18},${towerTop + 36} ${cx - 18},${towerTop + 36}" fill="#cbd5e1" opacity="0.88"/>
+        <rect x="${cx - 24}" y="${towerTop + 10}" width="48" height="26" rx="4" fill="#fde047"/>
+        <polygon points="${cx - 30},${towerTop + 10} ${cx},${towerTop - 24} ${cx + 30},${towerTop + 10}" fill="#0f172a"/>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#050a14" opacity="0.42"/>
+      </g>
+    `;
+  }
+
   return `
-    <g id="${idPrefix}-back-art">
+    <g>
       <defs>
-        <linearGradient id="${idPrefix}-back-sky" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#0b172a"/>
-          <stop offset="60%" stop-color="#172c46"/>
-          <stop offset="100%" stop-color="#1e354f"/>
-        </linearGradient>
-        <linearGradient id="${idPrefix}-back-panel" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#050c17" stop-opacity="0.86"/>
-          <stop offset="100%" stop-color="#050c17" stop-opacity="0.76"/>
+        <linearGradient id="${idPrefix}-bsky" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#0b1528"/>
+          <stop offset="55%" stop-color="#1e294b"/>
+          <stop offset="100%" stop-color="#4a2c2a"/>
         </linearGradient>
       </defs>
-
-      <!-- Latar panorama senja & pantai (komplementer, berbeda dari cover depan) -->
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-back-sky)"/>
-      <circle cx="${x + Math.round(w * 0.24)}" cy="${y + Math.round(h * 0.22)}" r="${Math.round(w * 0.055)}" fill="#fcd34d" opacity="0.45"/>
-
-      <!-- Siluet perahu & riak air di bagian bawah -->
-      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#071526"/>
-      <path d="M ${x + Math.round(w * 0.18)} ${horizonY + 18} Q ${cx} ${horizonY + 42}, ${x + Math.round(w * 0.78)} ${horizonY + 14} L ${x + Math.round(w * 0.68)} ${horizonY + 44} L ${x + Math.round(w * 0.28)} ${horizonY + 44} Z" fill="#0f172a" opacity="0.9"/>
-      <path d="M ${x} ${horizonY + 75} Q ${cx} ${horizonY + 55}, ${x + w} ${horizonY + 78} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#040b14"/>
-
-      <!-- Panel gelap lembut di area teks sinopsis agar tulisan mudah dibaca -->
-      <rect x="${x + 120}" y="${y + 240}" width="${w - 240}" height="${Math.round(h * 0.45)}" rx="24" fill="url(#${idPrefix}-back-panel)" stroke="#fbbf24" stroke-opacity="0.28" stroke-width="3"/>
-
-      <!-- Ruang aman Barcode ISBN KDP (2.0" x 1.2") -->
-      <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="4"/>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-bsky)"/>
+      <circle cx="${x + Math.round(w * 0.25)}" cy="${y + Math.round(h * 0.22)}" r="${Math.round(w * 0.06)}" fill="#fcd34d" opacity="0.45"/>
+      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#071322"/>
+      <path d="M ${x + Math.round(w * 0.16)} ${horizonY + 16} Q ${cx} ${horizonY + 40}, ${x + Math.round(w * 0.78)} ${horizonY + 12} L ${x + Math.round(w * 0.66)} ${horizonY + 44} L ${x + Math.round(w * 0.28)} ${horizonY + 44} Z" fill="#0f172a"/>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#040912" opacity="0.38"/>
     </g>
   `;
 }
 
-function buildKdpCoverSvgs(
+async function buildKdpCoverSvgs(
   project: ProjectRow,
   batch: CuanNovelBatch,
   chapters: ChapterRow[]
-): {
+): Promise<{
   ebookCoverSvg: string;
   paperbackCoverSvg: string;
   spineWidthInches: number;
   estimatedPages: number;
-} {
+}> {
   const dpi = 300;
   const trimW = 6;
   const trimH = 9;
@@ -878,37 +759,45 @@ function buildKdpCoverSvgs(
   const spineX = bleedPx + trimWPx;
   const frontX = spineX + spinePx;
 
+  const frontPrompt = [
+    `Bestseller novel cover art for "${project.title}", genre ${project.genre}.`,
+    `Story premise: ${project.synopsis.slice(0, 260)}.`,
+    'Rich cinematic digital painting, dramatic atmospheric lighting, detailed world and focal subject, full bleed artwork, NO text, NO letters, NO watermarks.'
+  ].join(' ');
+
+  const backPrompt = [
+    `Complementary atmospheric back cover scene for "${project.title}", genre ${project.genre}.`,
+    `Different camera angle and mood matching the world: ${project.synopsis.slice(0, 220)}.`,
+    'Rich cinematic digital painting, moody lighting, subtle depth, full bleed artwork, NO text, NO letters, NO watermarks.'
+  ].join(' ');
+
+  const [frontArtUri, backArtUri] = await Promise.all([
+    fetchCoverIllustrationDataUri(frontPrompt, 1024, 1536),
+    fetchCoverIllustrationDataUri(backPrompt, 1024, 1536)
+  ]);
+
   const titleLines = wrapSvgLines(project.title, 18, 4);
-  const synopsisLines = wrapSvgLines(project.synopsis, 40, 13);
-
-  const titleSvgFront = titleLines
-    .map(
-      (line, i) =>
-        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${580 + i * 132}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
-    )
-    .join('\n');
-
-  const synopsisSvgBack = synopsisLines
-    .map(
-      (line, i) =>
-        `<text x="${backX + 170}" y="${420 + i * 64}" font-family="Georgia, serif" font-size="42" fill="#f1f5f9">${escapeHtml(line)}</text>`
-    )
-    .join('\n');
+  const synopsisLines = wrapSvgLines(project.synopsis, 38, 12);
 
   const ebookTitleSvg = titleLines
     .map(
       (line, i) =>
-        `<text x="800" y="${590 + i * 128}" text-anchor="middle" font-family="Georgia, serif" font-size="108" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
+        `<text x="800" y="${560 + i * 130}" text-anchor="middle" font-family="Georgia, serif" font-size="110" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
+  const frontBgLayer = frontArtUri
+    ? `<image href="${escapeHtml(frontArtUri)}" x="0" y="0" width="1600" height="2560" preserveAspectRatio="xMidYMid slice"/>
+       <rect x="0" y="0" width="1600" height="2560" fill="#050a14" opacity="0.34"/>`
+    : buildRichFallbackArtSvg(0, 0, 1600, 2560, 'eb', 'front');
+
   const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
-  ${buildFrontIllustrationSvg(0, 0, 1600, 2560, 'eb')}
-  <rect x="76" y="76" width="1448" height="2408" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.55"/>
-  <text x="800" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+  ${frontBgLayer}
+  <rect x="72" y="72" width="1456" height="2416" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.6"/>
+  <text x="800" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${ebookTitleSvg}
-  <text x="800" y="2290" text-anchor="middle" font-family="Georgia, serif" font-size="62" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="800" y="2300" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
   const barcodeW = Math.round(2.0 * dpi); // 600 px (2.0")
@@ -919,33 +808,46 @@ function buildKdpCoverSvgs(
   const spineCenterX = spineX + Math.round(spinePx / 2);
   const spineCenterY = Math.round(fullH / 2);
 
+  const pbFrontArt = frontArtUri
+    ? `<image href="${escapeHtml(frontArtUri)}" x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
+       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>`
+    : buildRichFallbackArtSvg(frontX - bleedPx, 0, trimWPx + bleedPx * 2, fullH, 'pbf', 'front');
+
+  const pbBackArt = backArtUri
+    ? `<image href="${escapeHtml(backArtUri)}" x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
+       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.32"/>`
+    : buildRichFallbackArtSvg(0, 0, trimWPx + bleedPx * 2, fullH, 'pbb', 'back');
+
+  const titleSvgFront = titleLines
+    .map(
+      (line, i) =>
+        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 540 + i * 134}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
+    )
+    .join('\n');
+
+  const synopsisSvgBack = synopsisLines
+    .map(
+      (line, i) =>
+        `<text x="${backX + 170}" y="${bleedPx + 390 + i * 64}" font-family="Georgia, serif" font-size="42" fill="#f8fafc">${escapeHtml(line)}</text>`
+    )
+    .join('\n');
+
   const paperbackCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${fullW}" height="${fullH}" viewBox="0 0 ${fullW} ${fullH}">
-  <!-- Sisi Belakang (Kiri): ilustrasi komplementer + sinopsis + ruang barcode -->
-  ${buildBackIllustrationSvg(backX, bleedPx, trimWPx, trimH * dpi, 'pb', barcodeX, barcodeY, barcodeW, barcodeH)}
+  ${pbBackArt}
+  ${pbFrontArt}
 
-  <!-- Punggung Buku / Spine (Tengah) -->
-  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="#091526"/>
+  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="#091326"/>
+  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
+  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
 
-  <!-- Sisi Depan (Kanan): ilustrasi penuh adegan cerita + judul + penulis -->
-  ${buildFrontIllustrationSvg(frontX, bleedPx, trimWPx, trimH * dpi, 'pb')}
-
-  <!-- Perpanjangan bleed luar seluruh kanvas -->
-  <rect x="0" y="0" width="${fullW}" height="${bleedPx}" fill="#071326" opacity="0.95"/>
-  <rect x="0" y="${fullH - bleedPx}" width="${fullW}" height="${bleedPx}" fill="#061220" opacity="0.95"/>
-  <rect x="0" y="${bleedPx}" width="${bleedPx}" height="${trimH * dpi}" fill="#0b172a" opacity="0.95"/>
-  <rect x="${fullW - bleedPx}" y="${bleedPx}" width="${bleedPx}" height="${trimH * dpi}" fill="#071326" opacity="0.95"/>
-
-  <!-- Garis lipatan spine halus -->
-  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#94a3b8" stroke-width="2" opacity="0.4"/>
-  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#94a3b8" stroke-width="2" opacity="0.4"/>
-
-  <!-- Konten Sampul Belakang -->
-  <text x="${backX + 170}" y="335" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
+  <rect x="${backX + 115}" y="${bleedPx + 200}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.48)}" rx="22" fill="#060d19" fill-opacity="0.84" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="3"/>
+  <text x="${backX + 170}" y="${bleedPx + 305}" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
   ${synopsisSvgBack}
-  <text x="${backX + 170}" y="${fullH - bleedPx - 210}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#e2e8f0">${escapeHtml(batch.publisher_name)}</text>
 
-  <!-- Teks Spine -->
+  <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="10" fill="#ffffff"/>
+  <text x="${backX + 170}" y="${fullH - bleedPx - 210}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#f8fafc">${escapeHtml(batch.publisher_name)}</text>
+
   ${
     spineWidthInches >= 0.35
       ? `<g transform="translate(${spineCenterX}, ${spineCenterY}) rotate(90)">
@@ -954,11 +856,10 @@ function buildKdpCoverSvgs(
       : ''
   }
 
-  <!-- Konten Sampul Depan -->
-  <rect x="${frontX + 110}" y="${bleedPx + 110}" width="${trimWPx - 220}" height="${trimH * dpi - 220}" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.55"/>
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 275}" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+  <rect x="${frontX + 105}" y="${bleedPx + 105}" width="${trimWPx - 210}" height="${trimH * dpi - 210}" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.6"/>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 270}" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${titleSvgFront}
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 245}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 240}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
   return {
@@ -1367,7 +1268,7 @@ export async function POST(req: NextRequest) {
         paperbackCoverSvg,
         spineWidthInches,
         estimatedPages
-      } = buildKdpCoverSvgs(project, batch, chapterList);
+      } = await buildKdpCoverSvgs(project, batch, chapterList);
 
       const metadataTxt = [
         `Title: ${project.title}`,
