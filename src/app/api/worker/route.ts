@@ -346,6 +346,39 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function cleanChapterTitle(title: string, chapterNum: number, isEn: boolean): string {
+  const raw = String(title || '').trim();
+  if (!raw) {
+    return isEn ? `Chapter ${chapterNum}` : `Bab ${chapterNum}`;
+  }
+  const prefixRegex = isEn
+    ? new RegExp(`^chapter\\s+${chapterNum}\\s*[:\\-–—.]*\\s*`, 'i')
+    : new RegExp(`^bab\\s+${chapterNum}\\s*[:\\-–—.]*\\s*`, 'i');
+  return raw.replace(prefixRegex, '').trim() || raw;
+}
+
+function splitIntoParagraphs(content: string): string[] {
+  const normalized = String(content || '').replace(/\r\n/g, '\n').trim();
+  if (!normalized) return [];
+  const blocks = normalized
+    .split(/\n\s*\n/)
+    .map((b) => b.replace(/\n+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (blocks.length > 1) return blocks;
+
+  return normalized
+    .split(/\n+/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+}
+
+function estimateChapterPages(content: string): number {
+  const words = countWords(content);
+  // sekitar 260 kata per halaman ukuran 6x9 inci
+  return Math.max(3, Math.ceil(words / 260));
+}
+
 function buildInteriorHtml(
   project: ProjectRow,
   batch: CuanNovelBatch,
@@ -355,64 +388,88 @@ function buildInteriorHtml(
   const sortedChapters = [...chapters].sort((a, b) => a.chapter_number - b.chapter_number);
   const yearNow = new Date().getFullYear();
 
-  // Lembar 1 = hlm 1, Balik Lembar 1 = hlm 2, Lembar 2 = hlm 3, Lembar 3 = hlm 4, Bab mulai hlm 5
-  const startPage = 5;
-  const pagesPerChapter = 4;
+  // Lembar 1 = hlm 1, Balik Lembar 1 = hlm 2, Lembar 2 = hlm 3, Lembar 3 = hlm 4, Bab 1 mulai hlm 5
+  let runningPage = 5;
+  const tocEntries = sortedChapters.map((ch) => {
+    const startPage = runningPage;
+    const pagesUsed = estimateChapterPages(ch.content);
+    runningPage += pagesUsed;
+    const cleanTitle = cleanChapterTitle(ch.title, ch.chapter_number, isEn);
+    const label = isEn ? `Chapter ${ch.chapter_number}: ${cleanTitle}` : `Bab ${ch.chapter_number}: ${cleanTitle}`;
+    return {
+      ch,
+      cleanTitle,
+      startPage,
+      label
+    };
+  });
 
-  const tocRows = sortedChapters
-    .map((ch, idx) => {
-      const pageNum = startPage + idx * pagesPerChapter;
-      const label = isEn ? `Chapter ${ch.chapter_number}` : `Bab ${ch.chapter_number}`;
-      return `<li><span>${label}: ${escapeHtml(ch.title)}</span><span>${pageNum}</span></li>`;
-    })
+  const tocRows = tocEntries
+    .map(
+      (entry) =>
+        `<div class="toc-row"><span class="toc-label">${escapeHtml(entry.label)}</span><span class="toc-dots"></span><span class="toc-page">${entry.startPage}</span></div>`
+    )
     .join('\n');
 
   const copyrightBlock = isEn
     ? `
-      <h2>Copyright</h2>
-      <p>Copyright &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Published by ${escapeHtml(batch.publisher_name)}.</p>
-      <p>All rights reserved. No part of this publication may be reproduced or distributed in any form without prior written permission from the author and publisher.</p>
+      <div class="meta-heading">Copyright</div>
+      <p class="no-indent">Copyright &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Published by ${escapeHtml(batch.publisher_name)}.</p>
+      <p class="no-indent">All rights reserved. No part of this book may be reproduced, stored in a retrieval system, or transmitted in any form or by any means—electronic, mechanical, photocopying, recording, or otherwise—without prior written permission from the author and publisher.</p>
+      <p class="no-indent">This is a work of fiction. Names, characters, places, and incidents are products of the author's imagination or are used fictitiously.</p>
     `
     : `
-      <h2>Hak Cipta</h2>
-      <p>Hak Cipta &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Diterbitkan oleh ${escapeHtml(batch.publisher_name)}.</p>
-      <p>Seluruh hak cipta dilindungi undang-undang. Dilarang memperbanyak atau menyebarkan bagian mana pun dari buku ini tanpa izin tertulis dari penulis dan penerbit.</p>
+      <div class="meta-heading">Hak Cipta</div>
+      <p class="no-indent">Hak Cipta &copy; ${yearNow} ${escapeHtml(project.pen_name)}. Diterbitkan oleh ${escapeHtml(batch.publisher_name)}.</p>
+      <p class="no-indent">Seluruh hak cipta dilindungi undang-undang. Dilarang memperbanyak, menyimpan dalam sistem penyimpanan data, atau menyebarkan bagian mana pun dari buku ini dalam bentuk atau cara apa pun tanpa izin tertulis dari penulis dan penerbit.</p>
+      <p class="no-indent">Novel ini merupakan karya fiksi. Nama tokoh, tempat, dan peristiwa merupakan rekaan penulis atau digunakan secara fiktif.</p>
     `;
 
   const openingAck = isEn
     ? `
-      <h2>Acknowledgments</h2>
-      <p>Thank you for picking up this story. Every page was crafted to accompany your quiet moments and spark imagination.</p>
+      <div class="section-heading">Acknowledgments</div>
+      <p>Thank you for picking up this book and stepping into its world. Every scene was written with care to accompany your quiet hours and spark your imagination.</p>
+      <p>My sincere gratitude goes to every reader who gives new stories a chance to breathe.</p>
     `
     : `
-      <h2>Ucapan Terima Kasih</h2>
-      <p>Terima kasih telah membuka dan membaca kisah ini. Semoga setiap halaman dapat menemani waktu luang Anda dengan cerita yang berkesan.</p>
+      <div class="section-heading">Ucapan Terima Kasih</div>
+      <p>Terima kasih telah membuka buku ini dan melangkah masuk ke dalam kisahnya. Setiap bagian ditulis dengan penuh perhatian untuk menemani waktu baca Anda.</p>
+      <p>Rasa terima kasih yang tulus saya sampaikan kepada setiap pembaca yang selalu meluangkan waktu untuk menikmati karya cerita.</p>
     `;
 
   const closingAck = isEn
     ? `
-      <h2>Thank You, Dear Reader</h2>
-      <p>Thank you for staying until the final chapter of <em>${escapeHtml(project.title)}</em>. Your time and support mean everything.</p>
-      <p>— ${escapeHtml(project.pen_name)}</p>
+      <div class="section-heading">Thank You, Dear Reader</div>
+      <p>Thank you for staying until the final page of <em>${escapeHtml(project.title)}</em>. Your time, patience, and support mean more than words can express.</p>
+      <p>If this story stayed with you, I hope you will look forward to the next journey ahead.</p>
+      <p class="signature">— ${escapeHtml(project.pen_name)}</p>
     `
     : `
-      <h2>Terima Kasih untuk Pembaca</h2>
-      <p>Terima kasih telah membaca <em>${escapeHtml(project.title)}</em> hingga halaman terakhir. Apresiasi Anda sangat berarti bagi perjalanan menulis ini.</p>
-      <p>— ${escapeHtml(project.pen_name)}</p>
+      <div class="section-heading">Terima Kasih untuk Pembaca</div>
+      <p>Terima kasih telah membaca <em>${escapeHtml(project.title)}</em> hingga halaman terakhir. Waktu, perhatian, dan dukungan Anda sangat berarti bagi perjalanan penulisan ini.</p>
+      <p>Apabila kisah ini meninggalkan kesan tersendiri, semoga kita dapat bertemu kembali di karya berikutnya.</p>
+      <p class="signature">— ${escapeHtml(project.pen_name)}</p>
     `;
 
-  const chapterHtml = sortedChapters
-    .map((ch) => {
-      const paragraphs = String(ch.content || '')
-        .split(/\n\s*\n/)
-        .map((p) => p.trim())
-        .filter(Boolean)
+  const chapterHtml = tocEntries
+    .map(({ ch, cleanTitle, startPage }) => {
+      const paragraphs = splitIntoParagraphs(ch.content)
         .map((p) => `<p>${escapeHtml(p)}</p>`)
         .join('\n');
       const heading = isEn
-        ? `Chapter ${ch.chapter_number}: ${escapeHtml(ch.title)}`
-        : `Bab ${ch.chapter_number}: ${escapeHtml(ch.title)}`;
-      return `<section class="page break-before"><h2>${heading}</h2>\n${paragraphs}</section>`;
+        ? `Chapter ${ch.chapter_number}: ${escapeHtml(cleanTitle)}`
+        : `Bab ${ch.chapter_number}: ${escapeHtml(cleanTitle)}`;
+      return `
+        <article class="book-sheet chapter-sheet" data-page="${startPage}">
+          <div class="running-header">${escapeHtml(project.title)}</div>
+          <div class="chapter-number-label">${isEn ? `CHAPTER ${ch.chapter_number}` : `BAB ${ch.chapter_number}`}</div>
+          <h2 class="chapter-title">${escapeHtml(cleanTitle)}</h2>
+          <div class="chapter-body">
+            ${paragraphs}
+          </div>
+          <div class="running-footer">${startPage}</div>
+        </article>
+      `;
     })
     .join('\n');
 
@@ -420,44 +477,236 @@ function buildInteriorHtml(
 <html lang="${isEn ? 'en' : 'id'}">
 <head>
 <meta charset="UTF-8" />
-<title>${escapeHtml(project.title)}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(project.title)} — ${escapeHtml(project.pen_name)}</title>
 <style>
-  @page { size: 6in 9in; margin: 0.75in; }
-  body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.65; color: #111; }
-  .break-before { page-break-before: always; }
-  .break-after { page-break-after: always; }
-  .title-page { text-align: center; padding-top: 2.2in; }
-  .toc-list { list-style: none; padding: 0; margin: 0; }
-  .toc-list li { display: flex; justify-content: space-between; border-bottom: 1px dotted #aaa; padding: 6px 0; }
-  h1 { font-size: 22pt; margin-bottom: 0.5rem; }
-  h2 { font-size: 15pt; margin-bottom: 0.9rem; }
-  p { text-indent: 1.4em; margin: 0 0 0.7em 0; }
+  @page {
+    size: 6in 9in;
+    margin: 0.75in 0.75in 0.8in 0.75in;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 24px 12px;
+    background: #e2e8f0;
+    font-family: "Georgia", "Times New Roman", serif;
+    color: #18181b;
+    line-height: 1.72;
+  }
+
+  .book-sheet {
+    width: 6in;
+    min-height: 9in;
+    margin: 0 auto 24px auto;
+    padding: 0.75in 0.75in 0.8in 0.75in;
+    background: #ffffff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+    position: relative;
+    break-before: page;
+    page-break-before: always;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .book-sheet:first-child {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .book-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      padding: 0;
+    }
+    .book-sheet {
+      width: auto;
+      min-height: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+      break-after: auto;
+      page-break-after: auto;
+    }
+    .running-header,
+    .running-footer {
+      display: none;
+    }
+  }
+
+  .title-sheet {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-height: 7.4in;
+  }
+
+  .book-title-main {
+    font-size: 24pt;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    margin: 0 0 18px 0;
+    color: #0f172a;
+  }
+
+  .title-divider {
+    width: 64px;
+    height: 2px;
+    background: #94a3b8;
+    margin: 10px auto 18px auto;
+  }
+
+  .book-author-main {
+    font-size: 13pt;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin: 0 0 8px 0;
+    color: #1e293b;
+  }
+
+  .book-publisher-sub {
+    font-size: 10pt;
+    color: #64748b;
+    margin-top: 6px;
+  }
+
+  .meta-heading,
+  .section-heading {
+    font-size: 15pt;
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+
+  .chapter-number-label {
+    font-size: 9pt;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 4px;
+  }
+
+  .chapter-title {
+    font-size: 16pt;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0 0 18px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+
+  p {
+    font-size: 10.5pt;
+    line-height: 1.72;
+    margin: 0 0 9px 0;
+    text-indent: 1.35em;
+    text-align: justify;
+  }
+
+  p.no-indent {
+    text-indent: 0;
+    text-align: left;
+    margin-bottom: 11px;
+  }
+
+  p.signature {
+    text-indent: 0;
+    text-align: left;
+    font-style: italic;
+    margin-top: 18px;
+    font-weight: 600;
+  }
+
+  .toc-list {
+    margin-top: 10px;
+  }
+
+  .toc-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px dotted #cbd5e1;
+    font-size: 10.5pt;
+  }
+
+  .toc-label {
+    flex: 1;
+    color: #0f172a;
+  }
+
+  .toc-page {
+    font-weight: 700;
+    color: #334155;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .running-header {
+    font-size: 8.5pt;
+    color: #64748b;
+    text-align: center;
+    margin-bottom: 14px;
+    letter-spacing: 0.4px;
+  }
+
+  .running-footer {
+    margin-top: 22px;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+    font-size: 9.5pt;
+    color: #475569;
+  }
 </style>
 </head>
 <body>
-  <section class="page title-page break-after">
-    <h1>${escapeHtml(project.title)}</h1>
-    <p><strong>${escapeHtml(project.pen_name)}</strong></p>
+  <!-- Lembar 1: Halaman Judul & Penulis -->
+  <section class="book-sheet title-sheet" data-page="1">
+    <h1 class="book-title-main">${escapeHtml(project.title)}</h1>
+    <div class="title-divider"></div>
+    <div class="book-author-main">${escapeHtml(project.pen_name)}</div>
+    <div class="book-publisher-sub">${escapeHtml(batch.publisher_name)}</div>
   </section>
 
-  <section class="page break-after">
+  <!-- Balik Lembar 1: Copyright sesuai bahasa novel -->
+  <section class="book-sheet" data-page="2">
     ${copyrightBlock}
   </section>
 
-  <section class="page break-after">
+  <!-- Lembar 2: Ucapan Terima Kasih Pembuka -->
+  <section class="book-sheet" data-page="3">
     ${openingAck}
   </section>
 
-  <section class="page break-after">
-    <h2>${isEn ? 'Table of Contents' : 'Daftar Isi'}</h2>
-    <ul class="toc-list">
+  <!-- Lembar 3: Daftar Isi & Nomor Halaman -->
+  <section class="book-sheet" data-page="4">
+    <div class="section-heading">${isEn ? 'Table of Contents' : 'Daftar Isi'}</div>
+    <div class="toc-list">
       ${tocRows}
-    </ul>
+    </div>
   </section>
 
+  <!-- Isi Bab Buku -->
   ${chapterHtml}
 
-  <section class="page break-before">
+  <!-- Lembar Terakhir: Ucapan Terima Kasih untuk Pembaca -->
+  <section class="book-sheet" data-page="${runningPage}">
     ${closingAck}
   </section>
 </body>
@@ -471,7 +720,11 @@ function estimateTotalPages(chapters: ChapterRow[]): number {
 }
 
 function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[] {
-  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const words = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
   const lines: string[] = [];
   let current = '';
 
@@ -489,6 +742,109 @@ function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[
     lines.push(current);
   }
   return lines;
+}
+
+function buildFrontIllustrationSvg(x: number, y: number, w: number, h: number, idPrefix: string): string {
+  const cx = x + Math.round(w * 0.5);
+  const horizonY = y + Math.round(h * 0.62);
+  const baseY = y + h;
+  const lighthouseX = cx;
+  const lighthouseTopY = horizonY - Math.round(h * 0.24);
+
+  return `
+    <g id="${idPrefix}-front-art">
+      <defs>
+        <linearGradient id="${idPrefix}-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#071326"/>
+          <stop offset="55%" stop-color="#13294b"/>
+          <stop offset="100%" stop-color="#29486b"/>
+        </linearGradient>
+        <linearGradient id="${idPrefix}-sea" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0f2942"/>
+          <stop offset="100%" stop-color="#061220"/>
+        </linearGradient>
+        <radialGradient id="${idPrefix}-beam" cx="50%" cy="50%" r="55%">
+          <stop offset="0%" stop-color="#fde68a" stop-opacity="0.72"/>
+          <stop offset="55%" stop-color="#f59e0b" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="${idPrefix}-scrim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#040b16" stop-opacity="0.82"/>
+          <stop offset="35%" stop-color="#040b16" stop-opacity="0.38"/>
+          <stop offset="72%" stop-color="#040b16" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#040b16" stop-opacity="0.88"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Langit & Laut Penuh -->
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-sky)"/>
+      <circle cx="${cx + Math.round(w * 0.22)}" cy="${y + Math.round(h * 0.2)}" r="${Math.round(w * 0.075)}" fill="#fef3c7" opacity="0.85"/>
+
+      <!-- Cahaya Suar Mercusuar -->
+      <ellipse cx="${lighthouseX}" cy="${lighthouseTopY + 24}" rx="${Math.round(w * 0.44)}" ry="${Math.round(h * 0.14)}" fill="url(#${idPrefix}-beam)"/>
+
+      <!-- Lautan & Ombak -->
+      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="url(#${idPrefix}-sea)"/>
+      <path d="M ${x} ${horizonY + 28} Q ${cx - Math.round(w * 0.25)} ${horizonY - 12}, ${cx} ${horizonY + 24} T ${x + w} ${horizonY + 22} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#173a5e" opacity="0.65"/>
+      <path d="M ${x} ${horizonY + Math.round(h * 0.11)} Q ${cx - Math.round(w * 0.2)} ${horizonY + Math.round(h * 0.07)}, ${cx} ${horizonY + Math.round(h * 0.12)} T ${x + w} ${horizonY + Math.round(h * 0.11)} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#0b1f33" opacity="0.8"/>
+
+      <!-- Tebing Batu & Siluet Mercusuar -->
+      <polygon points="${x},${baseY} ${x},${horizonY - 18} ${cx - Math.round(w * 0.16)},${horizonY + 12} ${cx + Math.round(w * 0.2)},${horizonY + 48} ${x + w},${horizonY + 24} ${x + w},${baseY}" fill="#09111e"/>
+      <polygon points="${lighthouseX - 34},${horizonY + 8} ${lighthouseX + 34},${horizonY + 8} ${lighthouseX + 18},${lighthouseTopY + 34} ${lighthouseX - 18},${lighthouseTopY + 34}" fill="#e2e8f0" opacity="0.9"/>
+      <rect x="${lighthouseX - 24}" y="${lighthouseTopY + 10}" width="48" height="24" rx="4" fill="#fde047"/>
+      <polygon points="${lighthouseX - 28},${lighthouseTopY + 10} ${lighthouseX},${lighthouseTopY - 22} ${lighthouseX + 28},${lighthouseTopY + 10}" fill="#0f172a"/>
+
+      <!-- Gradasi pelindung kontras agar judul & nama penulis jelas terbaca -->
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-scrim)"/>
+    </g>
+  `;
+}
+
+function buildBackIllustrationSvg(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  idPrefix: string,
+  barcodeX: number,
+  barcodeY: number,
+  barcodeW: number,
+  barcodeH: number
+): string {
+  const cx = x + Math.round(w * 0.5);
+  const horizonY = y + Math.round(h * 0.68);
+  const baseY = y + h;
+
+  return `
+    <g id="${idPrefix}-back-art">
+      <defs>
+        <linearGradient id="${idPrefix}-back-sky" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#0b172a"/>
+          <stop offset="60%" stop-color="#172c46"/>
+          <stop offset="100%" stop-color="#1e354f"/>
+        </linearGradient>
+        <linearGradient id="${idPrefix}-back-panel" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#050c17" stop-opacity="0.86"/>
+          <stop offset="100%" stop-color="#050c17" stop-opacity="0.76"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Latar panorama senja & pantai (komplementer, berbeda dari cover depan) -->
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-back-sky)"/>
+      <circle cx="${x + Math.round(w * 0.24)}" cy="${y + Math.round(h * 0.22)}" r="${Math.round(w * 0.055)}" fill="#fcd34d" opacity="0.45"/>
+
+      <!-- Siluet perahu & riak air di bagian bawah -->
+      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#071526"/>
+      <path d="M ${x + Math.round(w * 0.18)} ${horizonY + 18} Q ${cx} ${horizonY + 42}, ${x + Math.round(w * 0.78)} ${horizonY + 14} L ${x + Math.round(w * 0.68)} ${horizonY + 44} L ${x + Math.round(w * 0.28)} ${horizonY + 44} Z" fill="#0f172a" opacity="0.9"/>
+      <path d="M ${x} ${horizonY + 75} Q ${cx} ${horizonY + 55}, ${x + w} ${horizonY + 78} L ${x + w} ${baseY} L ${x} ${baseY} Z" fill="#040b14"/>
+
+      <!-- Panel gelap lembut di area teks sinopsis agar tulisan mudah dibaca -->
+      <rect x="${x + 120}" y="${y + 240}" width="${w - 240}" height="${Math.round(h * 0.45)}" rx="24" fill="url(#${idPrefix}-back-panel)" stroke="#fbbf24" stroke-opacity="0.28" stroke-width="3"/>
+
+      <!-- Ruang aman Barcode ISBN KDP (2.0" x 1.2") -->
+      <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="4"/>
+    </g>
+  `;
 }
 
 function buildKdpCoverSvgs(
@@ -523,82 +879,86 @@ function buildKdpCoverSvgs(
   const frontX = spineX + spinePx;
 
   const titleLines = wrapSvgLines(project.title, 18, 4);
-  const synopsisLines = wrapSvgLines(project.synopsis, 44, 14);
+  const synopsisLines = wrapSvgLines(project.synopsis, 40, 13);
 
   const titleSvgFront = titleLines
     .map(
       (line, i) =>
-        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${620 + i * 135}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${580 + i * 132}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const synopsisSvgBack = synopsisLines
     .map(
       (line, i) =>
-        `<text x="${backX + 180}" y="${520 + i * 64}" font-family="Georgia, serif" font-size="44" fill="#e2e8f0">${escapeHtml(line)}</text>`
+        `<text x="${backX + 170}" y="${420 + i * 64}" font-family="Georgia, serif" font-size="42" fill="#f1f5f9">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const ebookTitleSvg = titleLines
     .map(
       (line, i) =>
-        `<text x="800" y="${640 + i * 130}" text-anchor="middle" font-family="Georgia, serif" font-size="108" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="800" y="${590 + i * 128}" text-anchor="middle" font-family="Georgia, serif" font-size="108" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
-  <defs>
-    <linearGradient id="ebBg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="55%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#334155"/>
-    </linearGradient>
-  </defs>
-  <rect width="1600" height="2560" fill="url(#ebBg)"/>
-  <rect x="90" y="90" width="1420" height="2380" fill="none" stroke="#d97706" stroke-width="6" opacity="0.7"/>
-  <text x="800" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fbbf24">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+  ${buildFrontIllustrationSvg(0, 0, 1600, 2560, 'eb')}
+  <rect x="76" y="76" width="1448" height="2408" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.55"/>
+  <text x="800" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${ebookTitleSvg}
-  <circle cx="800" cy="1480" r="190" fill="none" stroke="#fbbf24" stroke-width="5" opacity="0.6"/>
-  <text x="800" y="2260" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="800" y="2290" text-anchor="middle" font-family="Georgia, serif" font-size="62" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
-  const barcodeW = Math.round(2.0 * dpi);
-  const barcodeH = Math.round(1.2 * dpi);
-  const barcodeX = spineX - 150 - barcodeW;
-  const barcodeY = fullH - bleedPx - 150 - barcodeH;
+  const barcodeW = Math.round(2.0 * dpi); // 600 px (2.0")
+  const barcodeH = Math.round(1.2 * dpi); // 360 px (1.2")
+  const barcodeX = spineX - 135 - barcodeW;
+  const barcodeY = fullH - bleedPx - 135 - barcodeH;
 
   const spineCenterX = spineX + Math.round(spinePx / 2);
   const spineCenterY = Math.round(fullH / 2);
 
   const paperbackCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${fullW}" height="${fullH}" viewBox="0 0 ${fullW} ${fullH}">
-  <defs>
-    <linearGradient id="pbBg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="50%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#0f172a"/>
-    </linearGradient>
-  </defs>
-  <rect width="${fullW}" height="${fullH}" fill="url(#pbBg)"/>
-  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#475569" stroke-width="2" opacity="0.45"/>
-  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#475569" stroke-width="2" opacity="0.45"/>
-  <text x="${backX + 180}" y="380" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
+  <!-- Sisi Belakang (Kiri): ilustrasi komplementer + sinopsis + ruang barcode -->
+  ${buildBackIllustrationSvg(backX, bleedPx, trimWPx, trimH * dpi, 'pb', barcodeX, barcodeY, barcodeW, barcodeH)}
+
+  <!-- Punggung Buku / Spine (Tengah) -->
+  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="#091526"/>
+
+  <!-- Sisi Depan (Kanan): ilustrasi penuh adegan cerita + judul + penulis -->
+  ${buildFrontIllustrationSvg(frontX, bleedPx, trimWPx, trimH * dpi, 'pb')}
+
+  <!-- Perpanjangan bleed luar seluruh kanvas -->
+  <rect x="0" y="0" width="${fullW}" height="${bleedPx}" fill="#071326" opacity="0.95"/>
+  <rect x="0" y="${fullH - bleedPx}" width="${fullW}" height="${bleedPx}" fill="#061220" opacity="0.95"/>
+  <rect x="0" y="${bleedPx}" width="${bleedPx}" height="${trimH * dpi}" fill="#0b172a" opacity="0.95"/>
+  <rect x="${fullW - bleedPx}" y="${bleedPx}" width="${bleedPx}" height="${trimH * dpi}" fill="#071326" opacity="0.95"/>
+
+  <!-- Garis lipatan spine halus -->
+  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#94a3b8" stroke-width="2" opacity="0.4"/>
+  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#94a3b8" stroke-width="2" opacity="0.4"/>
+
+  <!-- Konten Sampul Belakang -->
+  <text x="${backX + 170}" y="335" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
   ${synopsisSvgBack}
-  <text x="${backX + 180}" y="${fullH - bleedPx - 220}" font-family="Arial, sans-serif" font-size="38" fill="#cbd5e1">${escapeHtml(batch.publisher_name)}</text>
-  <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="10" fill="#ffffff"/>
+  <text x="${backX + 170}" y="${fullH - bleedPx - 210}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#e2e8f0">${escapeHtml(batch.publisher_name)}</text>
+
+  <!-- Teks Spine -->
   ${
     spineWidthInches >= 0.35
       ? `<g transform="translate(${spineCenterX}, ${spineCenterY}) rotate(90)">
-          <text x="0" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="40" font-weight="bold" fill="#f8fafc">${escapeHtml(project.title)} — ${escapeHtml(project.pen_name)}</text>
+          <text x="0" y="13" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="bold" fill="#f8fafc">${escapeHtml(project.title)} — ${escapeHtml(project.pen_name)}</text>
         </g>`
       : ''
   }
-  <rect x="${frontX + 120}" y="${bleedPx + 120}" width="${trimWPx - 240}" height="${fullH - bleedPx * 2 - 240}" fill="none" stroke="#d97706" stroke-width="6" opacity="0.7"/>
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" letter-spacing="6" fill="#fbbf24">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
+
+  <!-- Konten Sampul Depan -->
+  <rect x="${frontX + 110}" y="${bleedPx + 110}" width="${trimWPx - 220}" height="${trimH * dpi - 220}" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.55"/>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 275}" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${titleSvgFront}
-  <circle cx="${frontX + Math.round(trimWPx / 2)}" cy="1560" r="200" fill="none" stroke="#fbbf24" stroke-width="5" opacity="0.6"/>
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 260}" text-anchor="middle" font-family="Georgia, serif" font-size="68" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 245}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
   return {
