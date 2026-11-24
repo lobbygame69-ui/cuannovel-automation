@@ -33,6 +33,20 @@ export interface CuanNovelQueueItem {
   last_error: string | null;
 }
 
+export interface AuditChapterItem {
+  chapterNumber: number;
+  wordCount: number;
+  hasError?: boolean;
+}
+
+export interface NovelAuditResult {
+  passed: boolean;
+  reason: string;
+  checkedChapters: number;
+  minWordsRequired: number;
+  retryChapterNumber?: number;
+}
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -59,6 +73,103 @@ export function normalizeLang(raw?: string | null): 'id' | 'en' {
 
 export function langLabel(lang?: string | null): string {
   return normalizeLang(lang) === 'en' ? 'Inggris (EN)' : 'Indonesia (ID)';
+}
+
+export function auditNovelBeforePackaging(params: {
+  chapters: AuditChapterItem[];
+  targetChapters: number;
+  minWordsPerChapter?: number;
+  qualityScore?: number | null;
+  minQualityScore?: number;
+}): NovelAuditResult {
+  const minWords = params.minWordsPerChapter ?? 1000;
+  const target = Math.max(1, params.targetChapters);
+  const minScore = params.minQualityScore ?? 80;
+
+  if (params.chapters.length < target) {
+    return {
+      passed: false,
+      reason: `Bab baru ${params.chapters.length}/${target} selesai. Belum lolos ke Packaging Paket.`,
+      checkedChapters: params.chapters.length,
+      minWordsRequired: minWords,
+      retryChapterNumber: params.chapters.length + 1
+    };
+  }
+
+  for (const ch of params.chapters) {
+    if (ch.hasError) {
+      return {
+        passed: false,
+        reason: `Bab ${ch.chapterNumber} memiliki error. Mengulang otomatis sebelum Packaging Paket.`,
+        checkedChapters: params.chapters.length,
+        minWordsRequired: minWords,
+        retryChapterNumber: ch.chapterNumber
+      };
+    }
+    if (ch.wordCount < minWords) {
+      return {
+        passed: false,
+        reason: `Bab ${ch.chapterNumber} hanya ${ch.wordCount} kata (<${minWords} kata). Mengulang otomatis.`,
+        checkedChapters: params.chapters.length,
+        minWordsRequired: minWords,
+        retryChapterNumber: ch.chapterNumber
+      };
+    }
+  }
+
+  if (typeof params.qualityScore === 'number' && params.qualityScore < minScore) {
+    return {
+      passed: false,
+      reason: `Skor kualitas ${params.qualityScore} (<${minScore}). Perlu perbaikan sebelum Packaging Paket.`,
+      checkedChapters: params.chapters.length,
+      minWordsRequired: minWords
+    };
+  }
+
+  return {
+    passed: true,
+    reason: `Lolos audit (${params.chapters.length}/${target} bab, semua ≥ ${minWords} kata). Siap masuk Packaging Paket.`,
+    checkedChapters: params.chapters.length,
+    minWordsRequired: minWords
+  };
+}
+
+export function extractShortChapterInfo(errorText?: string | null): {
+  chapter?: number;
+  words?: number;
+  isTooShort: boolean;
+} {
+  if (!errorText) return { isTooShort: false };
+  const match = errorText.match(/Bab\s+(\d+)\s+hanya\s+(\d+)\s+kata/i);
+  if (match) {
+    return {
+      chapter: Number(match[1]),
+      words: Number(match[2]),
+      isTooShort: true
+    };
+  }
+  return {
+    isTooShort: /<\s*1[.,]?000\s*kata|mengulang otomatis/i.test(errorText)
+  };
+}
+
+export function buildRetryChapterInstruction(params: {
+  chapterNumber: number;
+  previousWords?: number;
+  minWords?: number;
+  language?: 'id' | 'en' | string;
+}): string {
+  const minWords = params.minWords ?? 1000;
+  const lang = normalizeLang(params.language);
+  const prevNote =
+    typeof params.previousWords === 'number'
+      ? `Percobaan sebelumnya untuk Bab ${params.chapterNumber} hanya menghasilkan ${params.previousWords} kata sehingga ditolak. `
+      : '';
+
+  if (lang === 'en') {
+    return `${prevNote}Write a complete, rich novel chapter ${params.chapterNumber} with at least ${minWords} words (target 1,150–1,450 words) using full dialogue, sensory details, action, and internal conflict without summarizing.`;
+  }
+  return `${prevNote}Tulis naskah penuh Bab ${params.chapterNumber} dengan panjang minimal ${minWords} kata (target 1.150–1.450 kata) lewat dialog hidup, detail suasana, aksi nyata, dan konflik batin yang utuh tanpa merangkum.`;
 }
 
 export async function sbFetch(path: string, init: RequestInit = {}) {
