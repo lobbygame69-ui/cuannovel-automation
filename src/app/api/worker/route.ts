@@ -290,20 +290,22 @@ async function generateWithFailover(prompt: string): Promise<{ text: string; pro
   const or = await callOpenRouterText(prompt, openRouterKey);
   if (or) return { text: or, provider: 'openrouter-free' };
 
-  throw new Error('Semua provider AI teks gagal merespons (cek GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY).');
+  throw new Error(
+    'Semua provider AI teks gagal merespons (cek GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY).'
+  );
 }
 
 async function purgeProjectCompletely(projectId: string | null) {
   if (!projectId) return;
-  await sbFetch(`chapters?project_id=eq.${encodeURIComponent(projectId)}`, { method: 'DELETE' }).catch(
-    () => null
-  );
+  await sbFetch(`chapters?project_id=eq.${encodeURIComponent(projectId)}`, {
+    method: 'DELETE'
+  }).catch(() => null);
   await sbFetch(`novel_settings?project_id=eq.${encodeURIComponent(projectId)}`, {
     method: 'DELETE'
   }).catch(() => null);
-  await sbFetch(`projects?id=eq.${encodeURIComponent(projectId)}`, { method: 'DELETE' }).catch(
-    () => null
-  );
+  await sbFetch(`projects?id=eq.${encodeURIComponent(projectId)}`, {
+    method: 'DELETE'
+  }).catch(() => null);
 }
 
 async function uploadToDriveBridge(payload: Record<string, unknown>): Promise<string | null> {
@@ -481,7 +483,7 @@ function buildInteriorHtml(
     size: 6in 9in;
     margin: 0.75in 0.75in 0.8in 0.75in;
   }
-  * { box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; }
   body {
     margin: 0;
     padding: 24px 12px;
@@ -625,7 +627,7 @@ async function fetchCoverIllustrationDataUri(
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const timeoutId = setTimeout(() => controller.abort(), 16000);
 
   try {
     if (customEndpoint) {
@@ -652,7 +654,7 @@ async function fetchCoverIllustrationDataUri(
       }
     }
 
-    const encodedPrompt = encodeURIComponent(promptText.slice(0, 500));
+    const encodedPrompt = encodeURIComponent(promptText.slice(0, 480));
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true`;
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
@@ -759,16 +761,21 @@ async function buildKdpCoverSvgs(
   const spineX = bleedPx + trimWPx;
   const frontX = spineX + spinePx;
 
+  const noWatermarkRule =
+    'NO text, NO letters, NO watermarks, NO logos, NO AI generator names, NO corner signatures.';
+
   const frontPrompt = [
-    `Bestseller novel cover art for "${project.title}", genre ${project.genre}.`,
-    `Story premise: ${project.synopsis.slice(0, 260)}.`,
-    'Rich cinematic digital painting, dramatic atmospheric lighting, detailed world and focal subject, full bleed artwork, NO text, NO letters, NO watermarks.'
+    `Bestseller novel front cover art for "${project.title}", genre ${project.genre}.`,
+    `Premise: ${project.synopsis.slice(0, 240)}.`,
+    'Rich cinematic digital painting, dramatic atmospheric lighting, strong focal composition,',
+    noWatermarkRule
   ].join(' ');
 
   const backPrompt = [
-    `Complementary atmospheric back cover scene for "${project.title}", genre ${project.genre}.`,
-    `Different camera angle and mood matching the world: ${project.synopsis.slice(0, 220)}.`,
-    'Rich cinematic digital painting, moody lighting, subtle depth, full bleed artwork, NO text, NO letters, NO watermarks.'
+    `Matching atmospheric back cover scene for "${project.title}", genre ${project.genre}.`,
+    `Different angle and secondary setting from the front cover, evoking ${project.synopsis.slice(0, 200)}.`,
+    'Moody lighting, subtle depth, complementary color palette,',
+    noWatermarkRule
   ].join(' ');
 
   const [frontArtUri, backArtUri] = await Promise.all([
@@ -788,7 +795,8 @@ async function buildKdpCoverSvgs(
 
   const frontBgLayer = frontArtUri
     ? `<image href="${escapeHtml(frontArtUri)}" x="0" y="0" width="1600" height="2560" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="0" y="0" width="1600" height="2560" fill="#050a14" opacity="0.34"/>`
+       <rect x="0" y="0" width="1600" height="2560" fill="#050a14" opacity="0.34"/>
+       <rect x="0" y="2140" width="1600" height="420" fill="#050a14" opacity="0.72"/>`
     : buildRichFallbackArtSvg(0, 0, 1600, 2560, 'eb', 'front');
 
   const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -800,8 +808,8 @@ async function buildKdpCoverSvgs(
   <text x="800" y="2300" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
-  const barcodeW = Math.round(2.0 * dpi); // 600 px (2.0")
-  const barcodeH = Math.round(1.2 * dpi); // 360 px (1.2")
+  const barcodeW = Math.round(2.0 * dpi);
+  const barcodeH = Math.round(1.2 * dpi);
   const barcodeX = spineX - 135 - barcodeW;
   const barcodeY = fullH - bleedPx - 135 - barcodeH;
 
@@ -810,12 +818,13 @@ async function buildKdpCoverSvgs(
 
   const pbFrontArt = frontArtUri
     ? `<image href="${escapeHtml(frontArtUri)}" x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>`
+       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>
+       <rect x="${frontX - bleedPx}" y="${fullH - 420}" width="${trimWPx + bleedPx * 2}" height="420" fill="#050a14" opacity="0.74"/>`
     : buildRichFallbackArtSvg(frontX - bleedPx, 0, trimWPx + bleedPx * 2, fullH, 'pbf', 'front');
 
   const pbBackArt = backArtUri
     ? `<image href="${escapeHtml(backArtUri)}" x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.32"/>`
+       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>`
     : buildRichFallbackArtSvg(0, 0, trimWPx + bleedPx * 2, fullH, 'pbb', 'back');
 
   const titleSvgFront = titleLines
@@ -841,7 +850,7 @@ async function buildKdpCoverSvgs(
   <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
   <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
 
-  <rect x="${backX + 115}" y="${bleedPx + 200}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.48)}" rx="22" fill="#060d19" fill-opacity="0.84" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="3"/>
+  <rect x="${backX + 115}" y="${bleedPx + 200}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.48)}" rx="22" fill="#060d19" fill-opacity="0.86" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="3"/>
   <text x="${backX + 170}" y="${bleedPx + 305}" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
   ${synopsisSvgBack}
 
@@ -871,6 +880,8 @@ async function buildKdpCoverSvgs(
 }
 
 export async function POST(req: NextRequest) {
+  let activeSlotId: string | null = null;
+
   try {
     const cronSecret = getEnv('CRON_SECRET');
     if (cronSecret) {
@@ -992,6 +1003,8 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true, message: 'Batch completed' });
     }
+
+    activeSlotId = slot.id;
 
     if (slot.stage === 'scout_research' || slot.stage === 'trend_rework') {
       const existingFps = (await sbFetch(
@@ -1297,6 +1310,10 @@ export async function POST(req: NextRequest) {
       )) as ChapterRow[];
 
       const project = projects[0];
+      if (!project) {
+        throw new Error('Proyek untuk tahap packaging tidak ditemukan.');
+      }
+
       const chapterList = Array.isArray(chapters) ? chapters : [];
       const interiorHtml = buildInteriorHtml(project, batch, chapterList);
       const {
@@ -1379,6 +1396,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skippedStage: slot.stage });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (activeSlotId) {
+      await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(activeSlotId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          last_error: message,
+          updated_at: new Date().toISOString()
+        })
+      }).catch(() => null);
+    }
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
