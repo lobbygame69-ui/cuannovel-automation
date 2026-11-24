@@ -36,7 +36,7 @@ interface OfficePipelineBoardProps {
 }
 
 type CharacterStyleType = 'glasses' | 'curly' | 'neat' | 'creative' | 'courier';
-type IdleModeType = 'coffee' | 'balcony_smoke' | 'stroll';
+type RelaxModeType = 'coffee' | 'balcony_smoke' | 'stroll';
 
 interface WorkerProfile {
   key: string;
@@ -46,8 +46,8 @@ interface WorkerProfile {
   trait: string;
   favorite: string;
   workText: string;
-  coffeeBubbles: string[];
-  balconyBubbles: string[];
+  doneCoffeeBubbles: string[];
+  doneSmokeBubbles: string[];
   strollBubbles: string[];
   shirtMain: string;
   shirtTrim: string;
@@ -69,8 +69,8 @@ const WORKER_PROFILES: WorkerProfile[] = [
     trait: 'Penasaran & Teliti',
     favorite: 'Kopi Hitam',
     workText: 'Riset ide & sinopsis',
-    coffeeBubbles: ['Kopi hitam mantap!', 'Nemu ide unik nih'],
-    balconyBubbles: ['Di balkon aja ngerokoknya', 'Angin luar segar banget'],
+    doneCoffeeBubbles: ['Riset beres! Ngopi hitam dulu', 'Tugas kelar, sruput kopi'],
+    doneSmokeBubbles: ['Riset selesai, ngerokok di teras', 'Beres! Santai di luar dulu'],
     strollBubbles: ['Lirik-lirik tren baru', 'Jalan mikir sinopsis'],
     shirtMain: '#0284c7',
     shirtTrim: '#e0f2fe',
@@ -90,8 +90,8 @@ const WORKER_PROFILES: WorkerProfile[] = [
     trait: 'Imajinatif & Ekspresif',
     favorite: 'Teh Hangat & Roti',
     workText: 'Menulis bab novel',
-    coffeeBubbles: ['Ngeteh hangat dulu', 'Roti manis + plot twist!'],
-    balconyBubbles: ['Ngerokok di teras luar', 'Dilarang ngerokok di dalam!'],
+    doneCoffeeBubbles: ['Nulis beres! Ngeteh hangat dulu', 'Bab selesai, teh & roti mantap'],
+    doneSmokeBubbles: ['Bab kelar! Ngerokok di teras luar', 'Istirahat ngerokok di balkon'],
     strollBubbles: ['Wah nemu adegan seru!', 'Jalan goyang cari dialog'],
     shirtMain: '#2563eb',
     shirtTrim: '#dbeafe',
@@ -111,8 +111,8 @@ const WORKER_PROFILES: WorkerProfile[] = [
     trait: 'Tegas & Perfeksionis',
     favorite: 'Kopi Susu',
     workText: 'Audit bab & layout',
-    coffeeBubbles: ['Kopi susu biar fokus', 'Cek margin 6"x9"'],
-    balconyBubbles: ['Ke teras smoking dulu', 'Patuhi aturan kantor!'],
+    doneCoffeeBubbles: ['Audit beres! Ngopi susu dulu', 'Layout aman, santai ngopi'],
+    doneSmokeBubbles: ['Audit selesai, ngerokok di teras', 'Beres! Ke teras smoking dulu'],
     strollBubbles: ['Jalan rapi cek ruangan', 'Pastikan semua tertib'],
     shirtMain: '#059669',
     shirtTrim: '#d1fae5',
@@ -132,8 +132,8 @@ const WORKER_PROFILES: WorkerProfile[] = [
     trait: 'Ceria & Kreatif',
     favorite: 'Es Kopi Segar',
     workText: 'Desain cover & kemas',
-    coffeeBubbles: ['Sruput es kopi dulu!', 'Warna cover makin kece'],
-    balconyBubbles: ['Ngerokok di balkon luar', 'Udara luar bikin fresh'],
+    doneCoffeeBubbles: ['Cover beres! Sruput es kopi', 'Paket siap, minum dingin dulu'],
+    doneSmokeBubbles: ['Kemas beres! Ngerokok di teras', 'Santai ngerokok di luar'],
     strollBubbles: ['Goyang santai cari gaya', 'Cuci mata lihat desain'],
     shirtMain: '#9333ea',
     shirtTrim: '#f3e8ff',
@@ -153,8 +153,8 @@ const WORKER_PROFILES: WorkerProfile[] = [
     trait: 'Gesit & Ramah',
     favorite: 'Air Dingin & Camilan',
     workText: 'Upload ke Drive',
-    coffeeBubbles: ['Minum dingin dulu bos', 'Camilan siap meluncur'],
-    balconyBubbles: ['Ngerokok di teras smoking', 'Santai di luar ruangan'],
+    doneCoffeeBubbles: ['Upload beres! Minum dingin dulu', 'Terkirim! Nyemil santai dulu'],
+    doneSmokeBubbles: ['Drive beres! Ngerokok di teras', 'Tugas tuntas, ngebul di luar'],
     strollBubbles: ['Halo! Siap kirim file', 'Jalan lincah keliling'],
     shirtMain: '#d97706',
     shirtTrim: '#fef3c7',
@@ -235,9 +235,9 @@ interface SimAgent {
   y: number;
   targetX: number;
   targetY: number;
-  mode: IdleModeType;
+  relaxMode: RelaxModeType;
   atSpot: boolean;
-  modeTimer: number;
+  relaxTimer: number;
   bubbleIdx: number;
   bubbleTimer: number;
   walkPhase: number;
@@ -290,14 +290,16 @@ function drawLushPlant(ctx: CanvasRenderingContext2D, x: number, y: number) {
 
 const LivingOfficeCanvas: React.FC<{
   isAnyWorking: boolean;
+  isSlotDone: boolean;
   activeStageIdx: number;
   chaptersDone: number;
   totalChapters: number;
   lastWords?: number;
-}> = ({ isAnyWorking, activeStageIdx, chaptersDone, totalChapters, lastWords }) => {
+}> = ({ isAnyWorking, isSlotDone, activeStageIdx, chaptersDone, totalChapters, lastWords }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef({
     isAnyWorking,
+    isSlotDone,
     activeStageIdx,
     chaptersDone,
     totalChapters,
@@ -306,6 +308,7 @@ const LivingOfficeCanvas: React.FC<{
 
   stateRef.current = {
     isAnyWorking,
+    isSlotDone,
     activeStageIdx,
     chaptersDone,
     totalChapters,
@@ -318,34 +321,32 @@ const LivingOfficeCanvas: React.FC<{
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Titik ngopi di pantry dalam ruangan
     const coffeeSpots = [
       { rx: 0.65, ry: 0.42 },
       { rx: 0.72, ry: 0.48 },
-      { rx: 0.65, ry: 0.53 },
+      { rx: 0.65, ry: 0.54 },
       { rx: 0.73, ry: 0.39 },
-      { rx: 0.68, ry: 0.54 }
+      { rx: 0.68, ry: 0.62 }
     ];
 
-    // Titik merokok di balkon / teras luar ruangan (dilarang merokok di dalam kantor)
     const balconySpots = [
       { rx: 0.83, ry: 0.38 },
-      { rx: 0.91, ry: 0.44 },
+      { rx: 0.91, ry: 0.45 },
       { rx: 0.84, ry: 0.58 },
-      { rx: 0.92, ry: 0.68 },
+      { rx: 0.92, ry: 0.69 },
       { rx: 0.85, ry: 0.82 }
     ];
 
-    const initialModes: IdleModeType[] = ['coffee', 'balcony_smoke', 'stroll', 'coffee', 'balcony_smoke'];
+    const initialModes: RelaxModeType[] = ['coffee', 'balcony_smoke', 'stroll', 'coffee', 'balcony_smoke'];
 
     const agents: SimAgent[] = WORKER_PROFILES.map((w, i) => ({
       x: 130 + i * 110,
       y: i < 3 ? 195 : 275,
       targetX: 200 + i * 80,
       targetY: 225,
-      mode: initialModes[i],
+      relaxMode: initialModes[i],
       atSpot: false,
-      modeTimer: 4.5 + i * 1.2,
+      relaxTimer: 4.5 + i * 1.2,
       bubbleIdx: i,
       bubbleTimer: 0,
       walkPhase: i * 1.4,
@@ -355,9 +356,9 @@ const LivingOfficeCanvas: React.FC<{
     let rafId = 0;
     let lastTime = performance.now();
 
-    const pickTargetForMode = (
+    const pickRelaxSpot = (
       idx: number,
-      mode: IdleModeType,
+      mode: RelaxModeType,
       w: number,
       h: number,
       nowMs: number
@@ -397,14 +398,13 @@ const LivingOfficeCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // 1. Dinding atas kantor + papan aturan DILARANG MEROKOK DI DALAM
+      // 1. Dinding atas kantor + aturan dilarang merokok di dalam
       const wallGrad = ctx.createLinearGradient(0, 0, 0, logicalH * 0.25);
       wallGrad.addColorStop(0, '#cbd5e1');
       wallGrad.addColorStop(1, '#f1f5f9');
       ctx.fillStyle = wallGrad;
       ctx.fillRect(0, 0, logicalW, logicalH * 0.25);
 
-      // Papan aturan dilarang merokok di dalam ruangan
       const signX = logicalW * 0.34;
       const signY = 10;
       const signW = logicalW * 0.32;
@@ -419,9 +419,12 @@ const LivingOfficeCanvas: React.FC<{
       ctx.font = 'bold 9.5px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#b91c1c';
-      ctx.fillText('DILARANG MEROKOK DI DALAM KANTOR — GUNAKAN TERAS LUAR', signX + signW / 2, signY + 14.5);
+      ctx.fillText(
+        'DILARANG MEROKOK DI DALAM KANTOR — GUNAKAN TERAS LUAR',
+        signX + signW / 2,
+        signY + 14.5
+      );
 
-      // Jendela kantor
       [0.16, 0.84].forEach((ratio) => {
         const wx = logicalW * ratio;
         const wy = 13;
@@ -435,7 +438,7 @@ const LivingOfficeCanvas: React.FC<{
         ctx.stroke();
       });
 
-      // 2. Lantai kayu hangat di dalam kantor
+      // 2. Lantai kayu dalam ruangan
       const floorGrad = ctx.createLinearGradient(0, logicalH * 0.25, 0, logicalH);
       floorGrad.addColorStop(0, '#edd69e');
       floorGrad.addColorStop(1, '#d9b573');
@@ -463,7 +466,6 @@ const LivingOfficeCanvas: React.FC<{
       ctx.fillStyle = '#0f172a';
       ctx.fillText('TERAS SMOKING (LUAR)', balX + balW / 2, balY + 16);
 
-      // Kursi santai & asbak di teras luar
       ctx.fillStyle = '#475569';
       roundRectPath(ctx, balX + balW * 0.5 - 26, balY + 75, 52, 14, 4);
       ctx.fill();
@@ -472,7 +474,7 @@ const LivingOfficeCanvas: React.FC<{
       ctx.arc(balX + balW * 0.5, balY + 115, 6, 0, Math.PI * 2);
       ctx.fill();
 
-      // 4. Zona Kerja Pipeline (kiri)
+      // 4. Ruang Kerja Pipeline
       const wzX = logicalW * 0.03;
       const wzY = logicalH * 0.28;
       const wzW = logicalW * 0.525;
@@ -490,7 +492,7 @@ const LivingOfficeCanvas: React.FC<{
       ctx.fillStyle = '#93c5fd';
       ctx.fillText('RUANG KERJA PIPELINE', wzX + 12, wzY + 17);
 
-      // 5. Area Ngopi & Santai Minuman/Camilan (tengah-kanan dalam ruangan)
+      // 5. Pantry Kopi & Teh
       const czX = logicalW * 0.57;
       const czY = logicalH * 0.28;
       const czW = logicalW * 0.195;
@@ -506,7 +508,6 @@ const LivingOfficeCanvas: React.FC<{
       ctx.fillStyle = '#92400e';
       ctx.fillText('PANTRY KOPI & TEH', czX + 10, czY + 17);
 
-      // Meja counter kopi
       const barX = czX + czW * 0.5;
       const barY = czY + 42;
       ctx.fillStyle = '#78350f';
@@ -521,6 +522,7 @@ const LivingOfficeCanvas: React.FC<{
 
       const {
         isAnyWorking: working,
+        isSlotDone: slotDone,
         activeStageIdx: activeIdx,
         chaptersDone: chDone,
         totalChapters: totCh,
@@ -531,7 +533,7 @@ const LivingOfficeCanvas: React.FC<{
       WORKER_PROFILES.forEach((w, idx) => {
         const dx = w.deskRatioX * logicalW;
         const dy = w.deskRatioY * logicalH;
-        const isFocus = working && idx === activeIdx;
+        const isFocus = working && !slotDone && idx === activeIdx;
 
         ctx.fillStyle = '#334155';
         roundRectPath(ctx, dx - 10, dy - 20, 20, 9, 3.5);
@@ -551,34 +553,61 @@ const LivingOfficeCanvas: React.FC<{
         ctx.fillRect(dx - 8, dy - 18, 16, 7);
       });
 
-      // 7. Update posisi & aktivitas pekerja
+      // 7. Tentukan status tiap pekerja:
+      // - 'working': sedang aktif di tahap berjalan
+      // - 'completed_relax': sudah selesai tugasnya -> kembali ngopi/ngeteh atau ngerokok di teras
+      // - 'waiting': belum gilirannya -> siaga di dekat meja
+      // - 'idle_free': tidak ada pekerjaan aktif -> bebas ngopi/ngeteh, jalan, atau ke teras
+      type AgentRoleState = 'working' | 'completed_relax' | 'waiting' | 'idle_free';
+
       agents.forEach((ag, idx) => {
         const prof = WORKER_PROFILES[idx];
-        const isWorkerActive = working && idx === activeIdx;
+
+        let roleState: AgentRoleState = 'idle_free';
+        if (working && !slotDone) {
+          if (idx === activeIdx) roleState = 'working';
+          else if (idx < activeIdx) roleState = 'completed_relax';
+          else roleState = 'waiting';
+        } else if (slotDone) {
+          roleState = 'completed_relax';
+        }
 
         let goalX = ag.targetX;
         let goalY = ag.targetY;
 
-        if (isWorkerActive) {
+        if (roleState === 'working') {
           goalX = prof.deskRatioX * logicalW;
           goalY = prof.deskRatioY * logicalH + 20;
           ag.atSpot = false;
-        } else if (working) {
+        } else if (roleState === 'waiting') {
           goalX = prof.deskRatioX * logicalW + 16;
           goalY = prof.deskRatioY * logicalH + 23;
           ag.atSpot = false;
         } else {
-          ag.modeTimer -= dt;
-          if (ag.modeTimer <= 0) {
-            const cycle: IdleModeType[] = ['coffee', 'stroll', 'balcony_smoke'];
-            const nextMode = cycle[(cycle.indexOf(ag.mode) + 1) % cycle.length];
-            ag.mode = nextMode;
-            ag.modeTimer = nextMode === 'stroll' ? 4 : 6.5;
-            const nextPos = pickTargetForMode(idx, nextMode, logicalW, logicalH, now);
+          // completed_relax atau idle_free: boleh ngopi/ngeteh atau ke teras smoking
+          if (roleState === 'completed_relax' && ag.relaxMode === 'stroll') {
+            ag.relaxMode = idx % 2 === 0 ? 'coffee' : 'balcony_smoke';
+            const spot = pickRelaxSpot(idx, ag.relaxMode, logicalW, logicalH, now);
+            ag.targetX = spot.x;
+            ag.targetY = spot.y;
+          }
+
+          ag.relaxTimer -= dt;
+          if (ag.relaxTimer <= 0) {
+            const pool: RelaxModeType[] =
+              roleState === 'completed_relax'
+                ? ['coffee', 'balcony_smoke']
+                : ['coffee', 'stroll', 'balcony_smoke'];
+            const nextMode = pool[(pool.indexOf(ag.relaxMode) + 1) % pool.length];
+            ag.relaxMode = nextMode;
+            ag.relaxTimer = nextMode === 'stroll' ? 4 : 6.5;
+            const nextPos = pickRelaxSpot(idx, nextMode, logicalW, logicalH, now);
             ag.targetX = nextPos.x;
             ag.targetY = nextPos.y;
             ag.atSpot = false;
           }
+          goalX = ag.targetX;
+          goalY = ag.targetY;
         }
 
         const dx = goalX - ag.x;
@@ -587,14 +616,17 @@ const LivingOfficeCanvas: React.FC<{
 
         let moving = false;
         if (dist > 3.5) {
-          const speed = isWorkerActive ? 105 : 52;
+          const speed = roleState === 'working' ? 105 : 54;
           const step = Math.min(dist, speed * dt);
           ag.x += (dx / dist) * step;
           ag.y += (dy / dist) * step;
           ag.walkPhase += dt * 9.5;
           moving = true;
           ag.atSpot = false;
-        } else if (!working && (ag.mode === 'coffee' || ag.mode === 'balcony_smoke')) {
+        } else if (
+          (roleState === 'completed_relax' || roleState === 'idle_free') &&
+          (ag.relaxMode === 'coffee' || ag.relaxMode === 'balcony_smoke')
+        ) {
           ag.atSpot = true;
         }
 
@@ -608,7 +640,8 @@ const LivingOfficeCanvas: React.FC<{
           ag.bubbleIdx = (ag.bubbleIdx + 1) % 2;
         }
 
-        (ag as SimAgent & { _moving?: boolean })._moving = moving;
+        (ag as SimAgent & { _moving?: boolean; _roleState?: AgentRoleState })._moving = moving;
+        (ag as SimAgent & { _moving?: boolean; _roleState?: AgentRoleState })._roleState = roleState;
       });
 
       const drawList = agents.map((ag, idx) => ({ ag, idx })).sort((a, b) => a.ag.y - b.ag.y);
@@ -616,10 +649,14 @@ const LivingOfficeCanvas: React.FC<{
 
       drawList.forEach(({ ag, idx }) => {
         const prof = WORKER_PROFILES[idx];
-        const isWorkerActive = working && idx === activeIdx;
-        const moving = Boolean((ag as SimAgent & { _moving?: boolean })._moving);
-        const chillingCoffee = !working && ag.mode === 'coffee' && ag.atSpot;
-        const chillingBalconySmoke = !working && ag.mode === 'balcony_smoke' && ag.atSpot;
+        const ext = ag as SimAgent & { _moving?: boolean; _roleState?: AgentRoleState };
+        const roleState = ext._roleState || 'idle_free';
+        const moving = Boolean(ext._moving);
+
+        const isWorkerActive = roleState === 'working';
+        const isRelaxing = roleState === 'completed_relax' || roleState === 'idle_free';
+        const chillingCoffee = isRelaxing && ag.relaxMode === 'coffee' && ag.atSpot;
+        const chillingBalconySmoke = isRelaxing && ag.relaxMode === 'balcony_smoke' && ag.atSpot;
 
         const waddleTilt = moving ? Math.sin(ag.walkPhase) * 0.08 : 0;
         const bounceY = moving
@@ -642,7 +679,6 @@ const LivingOfficeCanvas: React.FC<{
         ctx.translate(px, py);
         ctx.rotate(waddleTilt);
 
-        // Kaki
         const legSwing = moving ? Math.sin(ag.walkPhase) * 5 : 0;
         ctx.strokeStyle = prof.pantsColor;
         ctx.lineWidth = 3.2;
@@ -661,19 +697,16 @@ const LivingOfficeCanvas: React.FC<{
         }
         ctx.stroke();
 
-        // Sepatu
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-7.5 + (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
         ctx.fillRect(2.5 - (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
 
-        // Badan kemeja + kerah
         ctx.fillStyle = prof.shirtMain;
         roundRectPath(ctx, -8.5, -6, 17, 13.5, 4.5);
         ctx.fill();
         ctx.fillStyle = prof.shirtTrim;
         ctx.fillRect(-3, -6, 6, 3);
 
-        // Lengan
         const armWave = moving
           ? -legSwing * 0.75
           : isWorkerActive
@@ -691,7 +724,6 @@ const LivingOfficeCanvas: React.FC<{
         ctx.lineTo(12.5, 4 - armWave);
         ctx.stroke();
 
-        // Gelas minuman kesukaan + uap saat ngopi/ngeteh
         if (chillingCoffee) {
           ctx.fillStyle = prof.cupColor;
           roundRectPath(ctx, 10, -1 + armWave * 0.4, 7.5, 6.5, 1.5);
@@ -709,7 +741,6 @@ const LivingOfficeCanvas: React.FC<{
           ctx.stroke();
         }
 
-        // Rokok & asap khusus di teras balkon luar
         if (chillingBalconySmoke) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.2;
@@ -733,7 +764,6 @@ const LivingOfficeCanvas: React.FC<{
           }
         }
 
-        // Kepala & ekspresi sesuai sifat
         ctx.fillStyle = '#fde68a';
         roundRectPath(ctx, -7.8, -21, 15.6, 15, 5.2);
         ctx.fill();
@@ -772,7 +802,6 @@ const LivingOfficeCanvas: React.FC<{
 
         ctx.restore();
 
-        // Label peran kecil
         ctx.font = 'bold 9.2px sans-serif';
         ctx.textAlign = 'center';
         const tagText = prof.roleTitle;
@@ -783,23 +812,26 @@ const LivingOfficeCanvas: React.FC<{
         ctx.fillStyle = '#0f172a';
         ctx.fillText(tagText, px, py + 28.5);
 
-        // Speech bubble anti-tumpuk
         let bubbleText = prof.strollBubbles[ag.bubbleIdx % prof.strollBubbles.length];
         if (isWorkerActive) {
           bubbleText =
             idx === 1 && chDone > 0
               ? `Bab ${chDone}/${totCh}${lw ? ` (${lw}k)` : ''}`
               : prof.workText;
-        } else if (working) {
-          bubbleText = 'Siaga di meja';
+        } else if (roleState === 'waiting') {
+          bubbleText = 'Menunggu giliran';
+        } else if (roleState === 'completed_relax') {
+          bubbleText = chillingBalconySmoke
+            ? prof.doneSmokeBubbles[ag.bubbleIdx % prof.doneSmokeBubbles.length]
+            : prof.doneCoffeeBubbles[ag.bubbleIdx % prof.doneCoffeeBubbles.length];
         } else if (chillingCoffee) {
-          bubbleText = prof.coffeeBubbles[ag.bubbleIdx % prof.coffeeBubbles.length];
+          bubbleText = prof.doneCoffeeBubbles[ag.bubbleIdx % prof.doneCoffeeBubbles.length];
         } else if (chillingBalconySmoke) {
-          bubbleText = prof.balconyBubbles[ag.bubbleIdx % prof.balconyBubbles.length];
+          bubbleText = prof.doneSmokeBubbles[ag.bubbleIdx % prof.doneSmokeBubbles.length];
         }
 
         ctx.font = 'bold 9.2px sans-serif';
-        const textW = Math.min(164, ctx.measureText(bubbleText).width + 14);
+        const textW = Math.min(176, ctx.measureText(bubbleText).width + 14);
         const bh = 18;
         let bx = Math.max(6, Math.min(logicalW - textW - 6, px - textW / 2));
         let by = Math.max(36, py - 44);
@@ -876,6 +908,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   const visibleFiles = fileTab === 'finished' ? finishedFiles : unfinishedFiles;
 
   const isAnyWorking = Boolean(busy || autoRun || activeSlot?.isRunning);
+  const isSlotDone = activeSlot ? isSlotFinished(activeSlot) : false;
   const totalChapters = Math.max(1, activeSlot?.totalChapters || 20);
   const activeStageIdx = activeSlot
     ? getStageIndex(activeSlot.stage, activeSlot.chaptersDone, totalChapters)
@@ -1248,18 +1281,19 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           <div>
             <strong>Virtual Kantor 5 Pekerja CuanNovel</strong>
             <span className="cn-floor-sub">
-              {isAnyWorking
-                ? `Pekerja aktif bekerja di stasiun #${activeStageIdx + 1} (${WORKER_PROFILES[activeStageIdx]?.roleTitle}).`
+              {isAnyWorking && !isSlotDone
+                ? `Pekerja aktif di stasiun #${activeStageIdx + 1} (${WORKER_PROFILES[activeStageIdx]?.roleTitle}) — pekerja yang sudah beres kembali ngopi/ngeteh atau ke teras smoking.`
                 : 'Tanpa pekerjaan aktif — pekerja ngopi/ngeteh di pantry, jalan santai, atau merokok di teras luar (dilarang merokok di dalam).'}
             </span>
           </div>
-          <span className={`cn-floor-chip ${isAnyWorking ? 'chip-work' : 'chip-idle'}`}>
-            {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE SANTAI · NO SMOKING INDOOR'}
+          <span className={`cn-floor-chip ${isAnyWorking && !isSlotDone ? 'chip-work' : 'chip-idle'}`}>
+            {isAnyWorking && !isSlotDone ? 'MODE KERJA AKTIF' : 'MODE SANTAI · NO SMOKING INDOOR'}
           </span>
         </div>
 
         <LivingOfficeCanvas
           isAnyWorking={isAnyWorking}
+          isSlotDone={isSlotDone}
           activeStageIdx={activeStageIdx}
           chaptersDone={activeSlot?.chaptersDone || 0}
           totalChapters={totalChapters}
@@ -1279,8 +1313,8 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
 
       <div className="cn-stations-grid">
         {WORKER_PROFILES.map((st, idx) => {
-          const isDone = activeSlot ? idx < activeStageIdx : false;
-          const isCurrent = activeSlot ? idx === activeStageIdx : false;
+          const isDone = activeSlot ? idx < activeStageIdx || isSlotDone : false;
+          const isCurrent = activeSlot && !isSlotDone ? idx === activeStageIdx : false;
           const stateLabel = isCurrent
             ? isAnyWorking
               ? 'SEDANG JALAN'
