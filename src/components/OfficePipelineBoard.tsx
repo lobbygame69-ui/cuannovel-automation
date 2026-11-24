@@ -35,12 +35,74 @@ interface OfficePipelineBoardProps {
   deletingSlot?: number | null;
 }
 
-const PIPELINE_STAGES = [
-  { key: 'scout_research', label: '1. Riset', shortTitle: 'Riset Proyek' },
-  { key: 'novelku_production', label: '2. Tulis Bab', shortTitle: 'Tulis Bab' },
-  { key: 'formatting_kdp', label: '3. Audit & Rapikan', shortTitle: 'Audit & Rapikan' },
-  { key: 'cover_generation', label: '4. Cover & Kemas', shortTitle: 'Cover & Kemas Paket' },
-  { key: 'gdrive_upload', label: '5. Google Drive', shortTitle: 'Google Drive' }
+interface WorkerRoleConfig {
+  key: string;
+  stationLabel: string;
+  shortTitle: string;
+  roleTitle: string;
+  workBubble: string;
+  idleBubble: string;
+  shirtColor: string;
+  hairColor: string;
+  roamAnimClass: string;
+}
+
+const WORKER_ROLES: WorkerRoleConfig[] = [
+  {
+    key: 'scout_research',
+    stationLabel: '1. Riset',
+    shortTitle: 'Riset Proyek',
+    roleTitle: 'Riset Novel',
+    workBubble: 'Riset ide & sinopsis...',
+    idleBubble: 'Mondar-mandir cari ide...',
+    shirtColor: '#0ea5e9',
+    hairColor: '#1e293b',
+    roamAnimClass: 'roam-a'
+  },
+  {
+    key: 'novelku_production',
+    stationLabel: '2. Tulis Bab',
+    shortTitle: 'Tulis Bab',
+    roleTitle: 'Penulis Bab',
+    workBubble: 'Mengetik bab cerita...',
+    idleBubble: 'Jalan-jalan cari inspirasi...',
+    shirtColor: '#2563eb',
+    hairColor: '#7c2d12',
+    roamAnimClass: 'roam-b'
+  },
+  {
+    key: 'formatting_kdp',
+    stationLabel: '3. Audit & Rapikan',
+    shortTitle: 'Audit & Rapikan',
+    roleTitle: 'Auditor KDP',
+    workBubble: 'Cek skor & tata letak...',
+    idleBubble: 'Mondar-mandir santai...',
+    shirtColor: '#10b981',
+    hairColor: '#334155',
+    roamAnimClass: 'roam-c'
+  },
+  {
+    key: 'cover_generation',
+    stationLabel: '4. Cover & Kemas',
+    shortTitle: 'Cover & Kemas Paket',
+    roleTitle: 'Desainer Cover',
+    workBubble: 'Desain cover & kemas...',
+    idleBubble: 'Jalan-jalan cek katalog...',
+    shirtColor: '#8b5cf6',
+    hairColor: '#d97706',
+    roamAnimClass: 'roam-d'
+  },
+  {
+    key: 'gdrive_upload',
+    stationLabel: '5. Google Drive',
+    shortTitle: 'Google Drive',
+    roleTitle: 'Kurir Drive',
+    workBubble: 'Kirim ke Google Drive...',
+    idleBubble: 'Mondar-mandir istirahat...',
+    shirtColor: '#f59e0b',
+    hairColor: '#0f172a',
+    roamAnimClass: 'roam-e'
+  }
 ];
 
 function getStageIndex(stage: string, chaptersDone: number, totalChapters: number): number {
@@ -105,192 +167,170 @@ function pickSingleActiveSlot(slots: PipelineSlotState[]): PipelineSlotState | n
   return firstUnfinished || slots[0];
 }
 
-const AiWorkerRobotBanner: React.FC<{
-  isWorking: boolean;
-  stageLabel: string;
-}> = ({ isWorking, stageLabel }) => {
-  const [idleMode, setIdleMode] = useState<'roam' | 'rest'>('roam');
-
+const WorkerCharacterSvg: React.FC<{
+  workerIndex: number;
+  shirtColor: string;
+  hairColor: string;
+  workingHere: boolean;
+  roamingNow: boolean;
+}> = ({ workerIndex, shirtColor, hairColor, workingHere, roamingNow }) => {
   return (
-    <div className={`cn-robot-bay ${isWorking ? 'is-working' : 'is-idle'}`}>
-      <div className="cn-robot-info">
-        <span className={`cn-robot-badge ${isWorking ? 'work' : 'idle'}`}>
-          {isWorking ? 'ROBOT AI · BEKERJA' : idleMode === 'roam' ? 'ROBOT AI · JALAN-JALAN' : 'ROBOT AI · ISTIRAHAT'}
-        </span>
-        <span className="cn-robot-desc">
-          {isWorking
-            ? `Sedang mengeksekusi tugas worker di tahap: ${stageLabel}`
-            : idleMode === 'roam'
-              ? 'Tidak ada antrean berjalan — Robot AI jalan-jalan santai di ruang kantor.'
-              : 'Tidak ada antrean berjalan — Robot AI duduk istirahat mengisi baterai.'}
-        </span>
-      </div>
+    <svg width="56" height="58" viewBox="0 0 56 58" aria-hidden="true">
+      {/* Bayangan di lantai */}
+      <ellipse cx="28" cy="54" rx="13" ry="3" fill="#0f172a" opacity="0.16" />
 
-      {!isWorking && (
-        <button
-          type="button"
-          onClick={() => setIdleMode((prev) => (prev === 'roam' ? 'rest' : 'roam'))}
-          className="cn-btn cn-btn-sm"
-        >
-          {idleMode === 'roam' ? 'Mode Istirahat' : 'Mode Jalan-Jalan'}
-        </button>
-      )}
+      <g className={workingHere ? 'wk-work-bounce' : roamingNow ? 'wk-walk-bob' : ''}>
+        {/* Kaki kiri & kanan */}
+        <line
+          x1="23"
+          y1="40"
+          x2="23"
+          y2="52"
+          stroke="#1e293b"
+          strokeWidth="3.4"
+          strokeLinecap="round"
+          className={roamingNow ? 'wk-leg-a' : ''}
+        />
+        <line
+          x1="33"
+          y1="40"
+          x2="33"
+          y2="52"
+          stroke="#1e293b"
+          strokeWidth="3.4"
+          strokeLinecap="round"
+          className={roamingNow ? 'wk-leg-b' : ''}
+        />
 
-      <div className="cn-robot-track">
-        <div
-          className={`cn-robot-actor ${
-            isWorking ? 'act-work' : idleMode === 'roam' ? 'act-roam' : 'act-rest'
-          }`}
-        >
-          <svg width="64" height="54" viewBox="0 0 64 54" aria-hidden="true">
-            {/* Antena Robot */}
-            <line x1="32" y1="5" x2="32" y2="12" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" />
-            <circle
-              cx="32"
-              cy="4.5"
-              r="3.2"
-              fill={isWorking ? '#10b981' : '#38bdf8'}
-              className="rb-ant"
-            />
-            {/* Kepala */}
-            <rect x="18" y="12" width="28" height="17" rx="5" fill="#1e293b" stroke="#0f172a" strokeWidth="1.5" />
-            {/* Mata */}
-            <circle cx="26.5" cy="20.5" r="2.6" fill={isWorking ? '#34d399' : '#7dd3fc'} className="rb-eye" />
-            <circle cx="37.5" cy="20.5" r="2.6" fill={isWorking ? '#34d399' : '#7dd3fc'} className="rb-eye" />
-            {/* Badan */}
-            <rect x="21" y="30" width="22" height="14" rx="4" fill="#0284c7" />
-            <rect x="26" y="34" width="12" height="5" rx="1.5" fill="#e0f2fe" opacity="0.85" />
-            {/* Lengan */}
-            <line x1="20" y1="33" x2="13" y2="39" stroke="#334155" strokeWidth="2.8" strokeLinecap="round" className="rb-arm-l" />
-            <line x1="44" y1="33" x2="51" y2="39" stroke="#334155" strokeWidth="2.8" strokeLinecap="round" className="rb-arm-r" />
-            {/* Kaki */}
-            <line x1="26" y1="44" x2="26" y2="51" stroke="#0f172a" strokeWidth="3" strokeLinecap="round" className="rb-leg-l" />
-            <line x1="38" y1="44" x2="38" y2="51" stroke="#0f172a" strokeWidth="3" strokeLinecap="round" className="rb-leg-r" />
-          </svg>
-        </div>
-      </div>
-    </div>
+        {/* Badan */}
+        <rect x="18" y="25" width="20" height="16" rx="5" fill={shirtColor} />
+
+        {/* Aksesori khas tiap pekerja */}
+        {workerIndex === 0 && (
+          <circle cx="42" cy="31" r="4.2" fill="#e0f2fe" stroke="#0284c7" strokeWidth="1.8" />
+        )}
+        {workerIndex === 1 && (
+          <rect x="39" y="27" width="8" height="10" rx="1.2" fill="#ffffff" stroke="#64748b" strokeWidth="1.2" />
+        )}
+        {workerIndex === 2 && (
+          <circle cx="42" cy="29" r="4.5" fill="#dcfce7" stroke="#16a34a" strokeWidth="1.5" />
+        )}
+        {workerIndex === 3 && (
+          <rect x="39" y="27" width="9" height="11" rx="1.5" fill="#1e293b" stroke="#fbbf24" strokeWidth="1.2" />
+        )}
+        {workerIndex === 4 && (
+          <rect x="38" y="28" width="10" height="9" rx="1.5" fill="#f59e0b" stroke="#92400e" strokeWidth="1.2" />
+        )}
+
+        {/* Tangan */}
+        <line
+          x1="18"
+          y1="29"
+          x2="12"
+          y2="36"
+          stroke="#fcd34d"
+          strokeWidth="3"
+          strokeLinecap="round"
+          className={workingHere ? 'wk-arm-work' : roamingNow ? 'wk-arm-walk' : ''}
+        />
+        <line
+          x1="38"
+          y1="29"
+          x2="44"
+          y2="36"
+          stroke="#fcd34d"
+          strokeWidth="3"
+          strokeLinecap="round"
+          className={workingHere ? 'wk-arm-work-alt' : roamingNow ? 'wk-arm-walk-alt' : ''}
+        />
+
+        {/* Kepala */}
+        <rect x="19" y="9" width="18" height="16" rx="5" fill="#fde68a" stroke="#d97706" strokeWidth="1.2" />
+        <path d="M19 14 C19 8, 37 8, 37 14 Z" fill={hairColor} />
+
+        {/* Mata */}
+        <circle cx="24.5" cy="18" r="1.7" fill="#0f172a" />
+        <circle cx="31.5" cy="18" r="1.7" fill="#0f172a" />
+      </g>
+    </svg>
   );
 };
 
-const SingleStationSvg: React.FC<{
-  stationIndex: number;
-  active: boolean;
-  isError: boolean;
-}> = ({ stationIndex, active, isError }) => {
-  const stateCls = active ? 'is-live' : 'is-rest';
-
-  if (stationIndex === 0) {
-    return (
-      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
-        <rect x="12" y="15" width="32" height="22" rx="3" fill="#0f172a" stroke="#475569" strokeWidth="1.8" />
-        <rect x="14.5" y="17.5" width="27" height="16" rx="1.5" fill="#38bdf8" className="st-anim-screen" />
-        <line x1="17.5" y1="21.5" x2="34" y2="21.5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="17.5" y1="25.5" x2="38" y2="25.5" stroke="#e0f2fe" strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="17.5" y1="29.5" x2="29" y2="29.5" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
-        <rect x="25" y="37" width="6" height="12" fill="#64748b" />
-        <rect x="16" y="45" width="18" height="3.5" rx="1.5" fill="#94a3b8" />
-
-        <g className="st-anim-riset-body">
-          <circle cx="56" cy="18" r="6.2" fill="#fbbf24" />
-          <path d="M50 16.5 C50 11.5, 62 11.5, 62 16.5 Z" fill="#1e293b" />
-          <path d="M46 49 C46 31, 66 31, 66 49 Z" fill="#0284c7" />
-          <path d="M49 34 L36 44" stroke="#fbbf24" strokeWidth="3.2" strokeLinecap="round" className="st-anim-ketik-l" />
-          <path d="M58 34 L42 45" stroke="#fbbf24" strokeWidth="3.2" strokeLinecap="round" className="st-anim-ketik-r" />
-        </g>
-
-        <g className="st-anim-lup">
-          <circle cx="72" cy="24" r="7.5" fill="#e0f2fe" fillOpacity="0.85" stroke="#0369a1" strokeWidth="2.4" />
-          <line x1="77.5" y1="29.5" x2="84" y2="36" stroke="#0369a1" strokeWidth="3" strokeLinecap="round" />
-        </g>
-      </svg>
-    );
-  }
-
-  if (stationIndex === 1) {
-    return (
-      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
-        <rect x="11" y="13" width="32" height="23" rx="3" fill="#0f172a" />
-        <rect
-          x="13.5"
-          y="15.5"
-          width="27"
-          height="17"
-          rx="1.5"
-          fill={active && isError ? '#ef4444' : active ? '#10b981' : '#64748b'}
-          className="st-anim-screen"
-        />
-        <rect x="24" y="36" width="6" height="13" fill="#64748b" />
-        <rect x="15" y="45" width="18" height="3.5" rx="1.5" fill="#94a3b8" />
-
-        <g className="st-anim-tulis">
-          <circle cx="56" cy="17" r="6" fill="#f59e0b" />
-          <path d="M46 49 C46 31, 66 31, 66 49 Z" fill="#2563eb" />
-          <circle cx="44" cy="40" r="3" fill="#fde68a" className="st-anim-tangan" />
-        </g>
-
-        <g className="st-anim-kertas">
-          <rect x="69" y="14" width="15" height="20" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.6" />
-          <line x1="72" y1="19" x2="81" y2="19" stroke="#475569" strokeWidth="1.6" />
-          <line x1="72" y1="24" x2="81" y2="24" stroke="#475569" strokeWidth="1.6" />
-          <line x1="72" y1="29" x2="78" y2="29" stroke="#10b981" strokeWidth="2" />
-        </g>
-      </svg>
-    );
-  }
-
-  if (stationIndex === 2) {
-    return (
-      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
-        <rect x="14" y="11" width="36" height="32" rx="3.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="20" y1="19" x2="43" y2="19" stroke="#64748b" strokeWidth="2" />
-        <line x1="20" y1="26" x2="43" y2="26" stroke="#64748b" strokeWidth="2" />
-        <line x1="20" y1="33" x2="35" y2="33" stroke="#94a3b8" strokeWidth="2" />
-
-        <g className="st-anim-audit">
-          <circle cx="65" cy="29" r="12.5" fill="#dcfce7" stroke="#16a34a" strokeWidth="2.5" />
-          <path
-            d="M59 29 L63.5 33.5 L72 24"
-            fill="none"
-            stroke="#16a34a"
-            strokeWidth="2.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </g>
-      </svg>
-    );
-  }
-
-  if (stationIndex === 3) {
-    return (
-      <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
-        <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
-        <g className="st-anim-kemas">
-          <rect x="12" y="12" width="18" height="23" rx="2" fill="#1e293b" stroke="#fbbf24" strokeWidth="1.6" />
-          <circle cx="21" cy="22" r="4" fill="#fbbf24" opacity="0.85" />
-          <line x1="15" y1="30" x2="27" y2="30" stroke="#f8fafc" strokeWidth="1.6" />
-        </g>
-        <rect x="44" y="21" width="32" height="28" rx="3.5" fill="#f59e0b" stroke="#b45309" strokeWidth="2" />
-        <path d="M44 21 L50 15 H70 L76 21" fill="#fbbf24" stroke="#b45309" strokeWidth="1.8" />
-        <line x1="60" y1="15" x2="60" y2="49" stroke="#fef3c7" strokeWidth="2.2" />
-      </svg>
-    );
-  }
+const FiveWorkersOfficeFloor: React.FC<{
+  isAnyWorking: boolean;
+  activeStageIdx: number;
+  lastWords?: number;
+  chaptersDone: number;
+  totalChapters: number;
+}> = ({ isAnyWorking, activeStageIdx, lastWords, chaptersDone, totalChapters }) => {
+  const getDynamicWorkText = (idx: number, defaultText: string) => {
+    if (idx === 1 && chaptersDone > 0) {
+      return `Bab ${chaptersDone}/${totalChapters}${lastWords ? ` (${lastWords}k)` : ''}`;
+    }
+    return defaultText;
+  };
 
   return (
-    <svg width="92" height="62" viewBox="0 0 92 62" className={`st-svg ${stateCls}`} aria-hidden="true">
-      <rect x="6" y="49" width="80" height="4.5" rx="2.2" fill="#334155" />
-      <g className="st-anim-drive">
-        <rect x="11" y="23" width="21" height="15" rx="2.5" fill="#2563eb" />
-        <path d="M16 30.5 H27 M23 27 L27 30.5 L23 34" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-      <path d="M46 15 H59 L63 20 H81 V45 H46 Z" fill="#16a34a" stroke="#15803d" strokeWidth="1.6" />
-      <rect x="51" y="25" width="25" height="15" rx="2" fill="#dcfce7" opacity="0.9" />
-    </svg>
+    <div className={`cn-floor-panel ${isAnyWorking ? 'is-busy' : 'is-idle'}`}>
+      <div className="cn-floor-head">
+        <div>
+          <strong>Ruang 5 Pekerja CuanNovel</strong>
+          <span className="cn-floor-sub">
+            {isAnyWorking
+              ? `Pekerja aktif di stasiun #${activeStageIdx + 1} (${WORKER_ROLES[activeStageIdx]?.roleTitle}) — pekerja lain bersiaga.`
+              : 'Tidak ada kerjaan berjalan — semua 5 pekerja mondar-mandir santai di ruang kantor.'}
+          </span>
+        </div>
+        <span className={`cn-floor-chip ${isAnyWorking ? 'chip-work' : 'chip-idle'}`}>
+          {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE MONDAR-MANDIR (IDLE)'}
+        </span>
+      </div>
+
+      <div className="cn-floor-stage">
+        {WORKER_ROLES.map((w, idx) => {
+          const workingHere = isAnyWorking && idx === activeStageIdx;
+          const roamingNow = !isAnyWorking;
+          const bubbleText = workingHere
+            ? getDynamicWorkText(idx, w.workBubble)
+            : roamingNow
+              ? w.idleBubble
+              : 'Siaga di meja';
+
+          return (
+            <div
+              key={w.key}
+              className={`cn-worker-lane ${workingHere ? 'is-working-lane' : ''} ${
+                roamingNow ? w.roamAnimClass : ''
+              }`}
+            >
+              <div className={`cn-speech-bubble ${workingHere ? 'bubble-active' : ''}`}>
+                {bubbleText}
+              </div>
+
+              <div className="cn-worker-visual">
+                <WorkerCharacterSvg
+                  workerIndex={idx}
+                  shirtColor={w.shirtColor}
+                  hairColor={w.hairColor}
+                  workingHere={workingHere}
+                  roamingNow={roamingNow}
+                />
+                {!roamingNow && (
+                  <div className="cn-mini-desk">
+                    <div className="cn-mini-monitor" />
+                  </div>
+                )}
+              </div>
+
+              <div className="cn-worker-tag">
+                <span className="cn-dot" style={{ background: workingHere ? '#10b981' : w.shirtColor }} />
+                <span>{w.roleTitle}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 };
 
@@ -318,9 +358,10 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   const unfinishedFiles = slots.filter((s) => !isSlotFinished(s));
   const visibleFiles = fileTab === 'finished' ? finishedFiles : unfinishedFiles;
 
-  const isWorking = Boolean(busy || autoRun || activeSlot?.isRunning);
+  const isAnyWorking = Boolean(busy || autoRun || activeSlot?.isRunning);
+  const totalChapters = Math.max(1, activeSlot?.totalChapters || 20);
   const activeStageIdx = activeSlot
-    ? getStageIndex(activeSlot.stage, activeSlot.chaptersDone, Math.max(1, activeSlot.totalChapters || 20))
+    ? getStageIndex(activeSlot.stage, activeSlot.chaptersDone, totalChapters)
     : 0;
 
   const handleCopyBatchId = () => {
@@ -388,10 +429,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           align-items: center;
           gap: 6px;
         }
-        .cn-btn-sm {
-          padding: 5px 10px;
-          font-size: 11.5px;
-        }
         .cn-btn:hover:not(:disabled) {
           background: #f1f5f9;
         }
@@ -433,107 +470,189 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #fecaca;
         }
 
-        .cn-robot-bay {
+        /* Panel Ruang 5 Pekerja + Mondar-Mandir */
+        .cn-floor-panel {
           background: #ffffff;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #cbd5e1;
           border-radius: 12px;
-          padding: 10px 14px;
-          margin-bottom: 14px;
+          padding: 14px;
+          margin-bottom: 16px;
         }
-        .cn-robot-bay.is-working {
+        .cn-floor-panel.is-busy {
           border-color: #34d399;
-          background: #ecfdf5;
+          background: #f0fdf4;
         }
-        .cn-robot-info {
+        .cn-floor-head {
           display: flex;
           flex-wrap: wrap;
+          justify-content: space-between;
           align-items: center;
           gap: 8px;
-          margin-bottom: 6px;
+          margin-bottom: 12px;
         }
-        .cn-robot-badge {
+        .cn-floor-sub {
+          display: block;
+          font-size: 12px;
+          color: #475569;
+          margin-top: 2px;
+        }
+        .cn-floor-chip {
           font-size: 11px;
           font-weight: 800;
-          padding: 3px 8px;
+          padding: 4px 10px;
           border-radius: 999px;
         }
-        .cn-robot-badge.work {
+        .chip-work {
           background: #059669;
           color: #ffffff;
         }
-        .cn-robot-badge.idle {
+        .chip-idle {
           background: #e0f2fe;
           color: #0369a1;
         }
-        .cn-robot-desc {
-          font-size: 12px;
-          color: #334155;
-        }
-        .cn-robot-track {
-          position: relative;
-          height: 56px;
-          border-radius: 8px;
+
+        .cn-floor-stage {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(120px, 1fr));
+          gap: 10px;
+          padding: 12px 8px 10px 8px;
+          border-radius: 10px;
           background: repeating-linear-gradient(
             90deg,
             #f8fafc 0px,
-            #f8fafc 48px,
-            #f1f5f9 48px,
-            #f1f5f9 96px
+            #f8fafc 36px,
+            #f1f5f9 36px,
+            #f1f5f9 72px
           );
-          border-bottom: 2px solid #cbd5e1;
+          border: 1px dashed #cbd5e1;
           overflow: hidden;
         }
-        .cn-robot-actor {
-          position: absolute;
-          bottom: 0;
-          left: 16px;
+        @media (max-width: 820px) {
+          .cn-floor-stage {
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+          }
         }
 
-        @keyframes robotWorkBounce {
+        .cn-worker-lane {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 118px;
+          padding: 4px;
+          border-radius: 8px;
+        }
+        .cn-worker-lane.is-working-lane {
+          background: rgba(16, 185, 129, 0.12);
+          outline: 1.5px solid #10b981;
+        }
+
+        .cn-speech-bubble {
+          background: #ffffff;
+          border: 1px solid #94a3b8;
+          color: #0f172a;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 3px 7px;
+          border-radius: 999px;
+          white-space: nowrap;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08);
+        }
+        .cn-speech-bubble.bubble-active {
+          background: #0f172a;
+          border-color: #0f172a;
+          color: #ffffff;
+        }
+
+        .cn-worker-visual {
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          gap: 2px;
+          margin-top: 4px;
+        }
+        .cn-mini-desk {
+          width: 16px;
+          height: 22px;
+          border-bottom: 3px solid #475569;
+          border-left: 2px solid #94a3b8;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding-top: 2px;
+        }
+        .cn-mini-monitor {
+          width: 10px;
+          height: 8px;
+          background: #38bdf8;
+          border-radius: 1.5px;
+        }
+
+        .cn-worker-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #1e293b;
+          margin-top: 4px;
+        }
+        .cn-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          display: inline-block;
+        }
+
+        @keyframes roamLeftRightA {
+          0% { transform: translateX(-10px) scaleX(1); }
+          45% { transform: translateX(14px) scaleX(1); }
+          50% { transform: translateX(14px) scaleX(-1); }
+          95% { transform: translateX(-10px) scaleX(-1); }
+          100% { transform: translateX(-10px) scaleX(1); }
+        }
+        @keyframes roamLeftRightB {
+          0% { transform: translateX(12px) scaleX(-1); }
+          45% { transform: translateX(-12px) scaleX(-1); }
+          50% { transform: translateX(-12px) scaleX(1); }
+          95% { transform: translateX(12px) scaleX(1); }
+          100% { transform: translateX(12px) scaleX(-1); }
+        }
+        @keyframes wkBounce {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-4px); }
+          50% { transform: translateY(-3px); }
         }
-        @keyframes robotRoamWalk {
-          0% { transform: translateX(0px) scaleX(1); }
-          45% { transform: translateX(260px) scaleX(1); }
-          50% { transform: translateX(260px) scaleX(-1); }
-          95% { transform: translateX(0px) scaleX(-1); }
-          100% { transform: translateX(0px) scaleX(1); }
+        @keyframes wkLegSwing {
+          0%, 100% { transform: rotate(-18deg); transform-origin: 23px 40px; }
+          50% { transform: rotate(18deg); transform-origin: 23px 40px; }
         }
-        @keyframes robotLegSwing {
-          0%, 100% { transform: rotate(-16deg); transform-origin: 26px 44px; }
-          50% { transform: rotate(16deg); transform-origin: 26px 44px; }
-        }
-        @keyframes robotArmWork {
-          0%, 100% { transform: rotate(-12deg); transform-origin: 20px 33px; }
-          50% { transform: rotate(14deg); transform-origin: 20px 33px; }
-        }
-        @keyframes robotRestBreath {
-          0%, 100% { transform: translateY(2px) scaleY(0.96); }
-          50% { transform: translateY(0px) scaleY(1); }
+        @keyframes wkArmSwing {
+          0%, 100% { transform: rotate(-15deg); transform-origin: 18px 29px; }
+          50% { transform: rotate(15deg); transform-origin: 18px 29px; }
         }
 
-        .act-work {
-          animation: robotWorkBounce 0.55s ease-in-out infinite;
+        .roam-a, .roam-c, .roam-e {
+          animation: roamLeftRightA 5.2s ease-in-out infinite;
         }
-        .act-work .rb-arm-l,
-        .act-work .rb-arm-r {
-          animation: robotArmWork 0.35s ease-in-out infinite;
+        .roam-b, .roam-d {
+          animation: roamLeftRightB 5.8s ease-in-out infinite;
         }
-        .act-roam {
-          animation: robotRoamWalk 6.5s linear infinite;
+        .wk-work-bounce {
+          animation: wkBounce 0.55s ease-in-out infinite;
         }
-        .act-roam .rb-leg-l,
-        .act-roam .rb-leg-r {
-          animation: robotLegSwing 0.45s ease-in-out infinite;
+        .wk-leg-a, .wk-leg-b {
+          animation: wkLegSwing 0.45s ease-in-out infinite;
         }
-        .act-rest {
-          animation: robotRestBreath 2.2s ease-in-out infinite;
+        .wk-arm-work, .wk-arm-work-alt {
+          animation: wkArmSwing 0.35s ease-in-out infinite;
         }
 
         .cn-stations-grid {
           display: grid;
-          grid-template-columns: repeat(5, minmax(130px, 1fr));
+          grid-template-columns: repeat(5, minmax(120px, 1fr));
           gap: 10px;
           margin-bottom: 16px;
         }
@@ -548,8 +667,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           border-radius: 10px;
           padding: 10px;
           text-align: center;
-          opacity: 0.68;
-          transition: transform 0.2s ease, border-color 0.2s ease;
+          opacity: 0.72;
         }
         .cn-station-box.is-done {
           border-color: #86efac;
@@ -561,32 +679,17 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
           background: #eff6ff;
           opacity: 1;
-          transform: translateY(-2px);
-        }
-        .cn-station-box.is-current.is-stopped {
-          border-color: #94a3b8;
-          box-shadow: none;
-          background: #f1f5f9;
-          opacity: 0.92;
-          transform: none;
-        }
-        .cn-station-box.is-current.is-err {
-          border-color: #ef4444;
-          box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
-          background: #fef2f2;
         }
         .cn-station-label {
           font-size: 11.5px;
           font-weight: 700;
-          margin-top: 4px;
           color: #0f172a;
         }
         .cn-station-state {
           font-size: 10px;
           font-weight: 800;
-          margin-top: 2px;
+          margin-top: 3px;
           color: #475569;
-          letter-spacing: 0.3px;
         }
 
         .cn-active-card {
@@ -704,68 +807,6 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           color: #475569;
           margin-top: 2px;
         }
-
-        @keyframes animRisetBody {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-2px) rotate(-1.5deg); }
-        }
-        @keyframes animKetikL {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-2.5px); }
-        }
-        @keyframes animKetikR {
-          0%, 100% { transform: translateY(-2.5px); }
-          50% { transform: translateY(0px); }
-        }
-        @keyframes animLup {
-          0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
-          35% { transform: translate(-10px, 2px) rotate(-6deg); }
-          70% { transform: translate(-4px, -3px) rotate(5deg); }
-        }
-        @keyframes animTulis {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-3px); }
-        }
-        @keyframes animTangan {
-          0%, 100% { transform: translate(0px, 0px); }
-          50% { transform: translate(-2.5px, 2px); }
-        }
-        @keyframes animKertas {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-3.5px); }
-        }
-        @keyframes animAudit {
-          0%, 100% { transform: scale(1) translateY(0px); }
-          50% { transform: scale(1.08) translateY(-2px); }
-        }
-        @keyframes animKemas {
-          0%, 100% { transform: translate(0px, 0px); }
-          50% { transform: translate(14px, 6px) scale(0.92); }
-        }
-        @keyframes animDrive {
-          0%, 100% { transform: translateX(0px); }
-          50% { transform: translateX(11px); }
-        }
-        @keyframes animBlink {
-          0%, 100% { opacity: 0.72; }
-          50% { opacity: 1; }
-        }
-
-        .st-svg.is-live .st-anim-riset-body { animation: animRisetBody 1.1s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-ketik-l { animation: animKetikL 0.28s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-ketik-r { animation: animKetikR 0.28s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-lup { animation: animLup 1.8s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-tulis { animation: animTulis 0.55s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-tangan { animation: animTangan 0.26s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-kertas { animation: animKertas 1.2s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-screen { animation: animBlink 0.75s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-audit { animation: animAudit 1.15s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-kemas { animation: animKemas 1.3s ease-in-out infinite; }
-        .st-svg.is-live .st-anim-drive { animation: animDrive 1.1s ease-in-out infinite; }
-
-        .st-svg.is-rest * {
-          animation: none !important;
-        }
       `}</style>
 
       <div className="cn-top">
@@ -797,122 +838,109 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         </div>
       </div>
 
-      <AiWorkerRobotBanner
-        isWorking={isWorking}
-        stageLabel={PIPELINE_STAGES[activeStageIdx]?.shortTitle || 'Riset Proyek'}
+      <FiveWorkersOfficeFloor
+        isAnyWorking={isAnyWorking}
+        activeStageIdx={activeStageIdx}
+        lastWords={activeSlot?.lastWords}
+        chaptersDone={activeSlot?.chaptersDone || 0}
+        totalChapters={totalChapters}
       />
 
+      <div className="cn-stations-grid">
+        {WORKER_ROLES.map((st, idx) => {
+          const isDone = activeSlot ? idx < activeStageIdx : false;
+          const isCurrent = activeSlot ? idx === activeStageIdx : false;
+          const stateLabel = isCurrent
+            ? isAnyWorking
+              ? 'SEDANG JALAN'
+              : 'SIAGA'
+            : isDone
+              ? 'SELESAI'
+              : 'MENUNGGU';
+
+          return (
+            <div
+              key={st.key}
+              className={`cn-station-box ${isCurrent ? 'is-current' : isDone ? 'is-done' : ''}`}
+            >
+              <div className="cn-station-label">{st.stationLabel}</div>
+              <div className="cn-station-state">{stateLabel}</div>
+            </div>
+          );
+        })}
+      </div>
+
       {activeSlot && (() => {
-        const total = Math.max(1, activeSlot.totalChapters || 20);
-        const pct = Math.min(100, Math.round((activeSlot.chaptersDone / total) * 100));
+        const pct = Math.min(100, Math.round((activeSlot.chaptersDone / totalChapters) * 100));
         const isErr = Boolean(activeSlot.error);
-        const canAnimate = Boolean(activeSlot.isRunning || autoRun);
 
         return (
-          <>
-            <div className="cn-stations-grid">
-              {PIPELINE_STAGES.map((st, idx) => {
-                const isDone = idx < activeStageIdx;
-                const isCurrent = idx === activeStageIdx;
-                const isStoppedHere = isCurrent && !canAnimate && !isErr;
-
-                const boxCls = isCurrent
-                  ? `cn-station-box is-current ${isErr ? 'is-err' : isStoppedHere ? 'is-stopped' : ''}`
-                  : isDone
-                    ? 'cn-station-box is-done'
-                    : 'cn-station-box';
-
-                const stateLabel = isCurrent
-                  ? isErr
-                    ? 'MENGULANG'
-                    : canAnimate
-                      ? 'SEDANG JALAN'
-                      : 'DIHENTIKAN'
-                  : isDone
-                    ? 'SELESAI'
-                    : 'MENUNGGU';
-
-                return (
-                  <div key={st.key} className={boxCls}>
-                    <SingleStationSvg
-                      stationIndex={idx}
-                      active={isCurrent && canAnimate}
-                      isError={isErr}
-                    />
-                    <div className="cn-station-label">{st.label}</div>
-                    <div className="cn-station-state">{stateLabel}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className={`cn-active-card ${isErr ? 'is-err' : ''}`}>
-              <div className="cn-row-between">
-                <div>
-                  <span className="cn-pill">Novel Aktif · Slot #{activeSlot.slot}</span>
-                  <strong style={{ marginLeft: 10, fontSize: 14 }}>
-                    {activeSlot.title || `Proyek Novel Slot #${activeSlot.slot}`}
-                  </strong>
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#64748b' }}>
-                    ({activeSlot.stage})
-                  </span>
-                </div>
-
-                <div className="cn-action-group">
-                  {onJumpToPackaging && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onJumpToPackaging(activeSlot)}
-                      className="cn-btn cn-btn-blue"
-                    >
-                      Kemas &amp; Upload Sekarang
-                    </button>
-                  )}
-                  {activeSlot.driveUrl && (
-                    <a
-                      href={activeSlot.driveUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="cn-btn cn-btn-blue"
-                    >
-                      Buka Drive
-                    </a>
-                  )}
-                  {onDeleteItem && (
-                    <button
-                      type="button"
-                      disabled={busy || deletingSlot === activeSlot.slot}
-                      onClick={() => onDeleteItem(activeSlot)}
-                      className="cn-btn cn-btn-danger"
-                    >
-                      {deletingSlot === activeSlot.slot ? 'Menghapus...' : 'Hapus Novel Aktif'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ marginTop: 8, fontSize: 12.5, color: '#334155' }}>
-                Tahap berjalan: <strong>{PIPELINE_STAGES[activeStageIdx]?.shortTitle}</strong>
-                {typeof activeSlot.lastWords === 'number'
-                  ? ` · Bab terakhir: ${activeSlot.lastWords} kata`
-                  : ''}
-                {activeSlot.provider ? ` · ${activeSlot.provider}` : ''}
-              </div>
-
-              {isErr && <div className="cn-err-text">{activeSlot.error}</div>}
-
-              <div className="cn-bar-head">
-                <span>Progres Bab</span>
-                <span>
-                  {activeSlot.chaptersDone}/{total} bab ({pct}%)
+          <div className={`cn-active-card ${isErr ? 'is-err' : ''}`}>
+            <div className="cn-row-between">
+              <div>
+                <span className="cn-pill">Novel Aktif · Slot #{activeSlot.slot}</span>
+                <strong style={{ marginLeft: 10, fontSize: 14 }}>
+                  {activeSlot.title || `Proyek Novel Slot #${activeSlot.slot}`}
+                </strong>
+                <span style={{ marginLeft: 8, fontSize: 12, color: '#64748b' }}>
+                  ({activeSlot.stage})
                 </span>
               </div>
-              <div className="cn-bar-track">
-                <div className={`cn-bar-fill ${isErr ? 'err' : ''}`} style={{ width: `${pct}%` }} />
+
+              <div className="cn-action-group">
+                {onJumpToPackaging && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onJumpToPackaging(activeSlot)}
+                    className="cn-btn cn-btn-blue"
+                  >
+                    Kemas &amp; Upload Sekarang
+                  </button>
+                )}
+                {activeSlot.driveUrl && (
+                  <a
+                    href={activeSlot.driveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="cn-btn cn-btn-blue"
+                  >
+                    Buka Drive
+                  </a>
+                )}
+                {onDeleteItem && (
+                  <button
+                    type="button"
+                    disabled={busy || deletingSlot === activeSlot.slot}
+                    onClick={() => onDeleteItem(activeSlot)}
+                    className="cn-btn cn-btn-danger"
+                  >
+                    {deletingSlot === activeSlot.slot ? 'Menghapus...' : 'Hapus Novel Aktif'}
+                  </button>
+                )}
               </div>
             </div>
-          </>
+
+            <div style={{ marginTop: 8, fontSize: 12.5, color: '#334155' }}>
+              Tahap berjalan: <strong>{WORKER_ROLES[activeStageIdx]?.shortTitle}</strong>
+              {typeof activeSlot.lastWords === 'number'
+                ? ` · Bab terakhir: ${activeSlot.lastWords} kata`
+                : ''}
+              {activeSlot.provider ? ` · ${activeSlot.provider}` : ''}
+            </div>
+
+            {isErr && <div className="cn-err-text">{activeSlot.error}</div>}
+
+            <div className="cn-bar-head">
+              <span>Progres Bab</span>
+              <span>
+                {activeSlot.chaptersDone}/{totalChapters} bab ({pct}%)
+              </span>
+            </div>
+            <div className="cn-bar-track">
+              <div className={`cn-bar-fill ${isErr ? 'err' : ''}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
         );
       })()}
 
@@ -936,7 +964,12 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           </div>
 
           {onClearLog && (
-            <button type="button" onClick={onClearLog} className="cn-btn" style={{ padding: '5px 10px', fontSize: 12 }}>
+            <button
+              type="button"
+              onClick={onClearLog}
+              className="cn-btn"
+              style={{ padding: '5px 10px', fontSize: 12 }}
+            >
               Bersihkan Log
             </button>
           )}
