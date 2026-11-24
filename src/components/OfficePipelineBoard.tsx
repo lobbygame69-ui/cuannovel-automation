@@ -36,21 +36,24 @@ interface OfficePipelineBoardProps {
 }
 
 type CharacterStyleType = 'glasses' | 'curly' | 'neat' | 'creative' | 'courier';
-type IdleModeType = 'coffee' | 'smoke' | 'stroll';
+type IdleModeType = 'coffee' | 'balcony_smoke' | 'stroll';
 
 interface WorkerProfile {
   key: string;
   stationLabel: string;
   shortTitle: string;
   roleTitle: string;
+  trait: string;
+  favorite: string;
   workText: string;
   coffeeBubbles: string[];
-  smokeBubbles: string[];
+  balconyBubbles: string[];
   strollBubbles: string[];
   shirtMain: string;
   shirtTrim: string;
   pantsColor: string;
   hairColor: string;
+  cupColor: string;
   styleType: CharacterStyleType;
   deskRatioX: number;
   deskRatioY: number;
@@ -63,90 +66,105 @@ const WORKER_PROFILES: WorkerProfile[] = [
     stationLabel: '1. Riset',
     shortTitle: 'Riset Proyek',
     roleTitle: 'Riset Novel',
+    trait: 'Penasaran & Teliti',
+    favorite: 'Kopi Hitam',
     workText: 'Riset ide & sinopsis',
-    coffeeBubbles: ['Sruput kopi dulu...', 'Kopi panas mantap!'],
-    smokeBubbles: ['Ngerokok sambil mikir', 'Santai hisap dulu'],
-    strollBubbles: ['Jalan cari ide baru', 'Cek sudut ruangan'],
+    coffeeBubbles: ['Kopi hitam mantap!', 'Nemu ide unik nih'],
+    balconyBubbles: ['Di balkon aja ngerokoknya', 'Angin luar segar banget'],
+    strollBubbles: ['Lirik-lirik tren baru', 'Jalan mikir sinopsis'],
     shirtMain: '#0284c7',
     shirtTrim: '#e0f2fe',
     pantsColor: '#1e293b',
     hairColor: '#0f172a',
+    cupColor: '#3f2e21',
     styleType: 'glasses',
-    deskRatioX: 0.14,
+    deskRatioX: 0.135,
     deskRatioY: 0.43,
-    roamBox: { minX: 0.07, maxX: 0.22, minY: 0.56, maxY: 0.84 }
+    roamBox: { minX: 0.06, maxX: 0.2, minY: 0.56, maxY: 0.84 }
   },
   {
     key: 'novelku_production',
     stationLabel: '2. Tulis Bab',
     shortTitle: 'Tulis Bab',
     roleTitle: 'Penulis Bab',
+    trait: 'Imajinatif & Ekspresif',
+    favorite: 'Teh Hangat & Roti',
     workText: 'Menulis bab novel',
-    coffeeBubbles: ['Ngopi biar plot lancar', 'Secangkir inspirasi'],
-    smokeBubbles: ['Ngerokok lepas penat', 'Ngebul santai dulu'],
-    strollBubbles: ['Jalan mikirin konflik', 'Goyang santai dulu'],
+    coffeeBubbles: ['Ngeteh hangat dulu', 'Roti manis + plot twist!'],
+    balconyBubbles: ['Ngerokok di teras luar', 'Dilarang ngerokok di dalam!'],
+    strollBubbles: ['Wah nemu adegan seru!', 'Jalan goyang cari dialog'],
     shirtMain: '#2563eb',
     shirtTrim: '#dbeafe',
     pantsColor: '#334155',
     hairColor: '#7c2d12',
+    cupColor: '#f59e0b',
     styleType: 'curly',
-    deskRatioX: 0.34,
+    deskRatioX: 0.32,
     deskRatioY: 0.43,
-    roamBox: { minX: 0.24, maxX: 0.38, minY: 0.56, maxY: 0.84 }
+    roamBox: { minX: 0.22, maxX: 0.35, minY: 0.56, maxY: 0.84 }
   },
   {
     key: 'formatting_kdp',
     stationLabel: '3. Audit & Rapikan',
     shortTitle: 'Audit & Rapikan',
     roleTitle: 'Auditor KDP',
+    trait: 'Tegas & Perfeksionis',
+    favorite: 'Kopi Susu',
     workText: 'Audit bab & layout',
-    coffeeBubbles: ['Ngopi cek ketelitian', 'Kopi susu dulu'],
-    smokeBubbles: ['Santai ngerokok dulu', 'Ngebul pelan-pelan'],
-    strollBubbles: ['Jalan santai keliling', 'Cek kerapian ruang'],
+    coffeeBubbles: ['Kopi susu biar fokus', 'Cek margin 6"x9"'],
+    balconyBubbles: ['Ke teras smoking dulu', 'Patuhi aturan kantor!'],
+    strollBubbles: ['Jalan rapi cek ruangan', 'Pastikan semua tertib'],
     shirtMain: '#059669',
     shirtTrim: '#d1fae5',
     pantsColor: '#1f2937',
     hairColor: '#334155',
+    cupColor: '#d97706',
     styleType: 'neat',
-    deskRatioX: 0.54,
+    deskRatioX: 0.505,
     deskRatioY: 0.43,
-    roamBox: { minX: 0.4, maxX: 0.54, minY: 0.56, maxY: 0.84 }
+    roamBox: { minX: 0.37, maxX: 0.5, minY: 0.56, maxY: 0.84 }
   },
   {
     key: 'cover_generation',
     stationLabel: '4. Cover & Kemas',
     shortTitle: 'Cover & Kemas Paket',
     roleTitle: 'Desainer Cover',
+    trait: 'Ceria & Kreatif',
+    favorite: 'Es Kopi Segar',
     workText: 'Desain cover & kemas',
-    coffeeBubbles: ['Ngopi cari estetika', 'Kopi dingin dulu'],
-    smokeBubbles: ['Ngerokok cari konsep', 'Duduk ngebul santai'],
-    strollBubbles: ['Jalan cuci mata', 'Mondar-mandir gaya'],
+    coffeeBubbles: ['Sruput es kopi dulu!', 'Warna cover makin kece'],
+    balconyBubbles: ['Ngerokok di balkon luar', 'Udara luar bikin fresh'],
+    strollBubbles: ['Goyang santai cari gaya', 'Cuci mata lihat desain'],
     shirtMain: '#9333ea',
     shirtTrim: '#f3e8ff',
     pantsColor: '#27272a',
     hairColor: '#eab308',
+    cupColor: '#38bdf8',
     styleType: 'creative',
-    deskRatioX: 0.22,
+    deskRatioX: 0.21,
     deskRatioY: 0.75,
-    roamBox: { minX: 0.08, maxX: 0.25, minY: 0.54, maxY: 0.72 }
+    roamBox: { minX: 0.07, maxX: 0.23, minY: 0.54, maxY: 0.72 }
   },
   {
     key: 'gdrive_upload',
     stationLabel: '5. Google Drive',
     shortTitle: 'Google Drive',
     roleTitle: 'Kurir Drive',
+    trait: 'Gesit & Ramah',
+    favorite: 'Air Dingin & Camilan',
     workText: 'Upload ke Drive',
-    coffeeBubbles: ['Ngopi sebelum kirim', 'Santai minum kopi'],
-    smokeBubbles: ['Ngerokok santai dulu', 'Ngebul sambil duduk'],
-    strollBubbles: ['Jalan santai keliling', 'Siap antar berkas'],
+    coffeeBubbles: ['Minum dingin dulu bos', 'Camilan siap meluncur'],
+    balconyBubbles: ['Ngerokok di teras smoking', 'Santai di luar ruangan'],
+    strollBubbles: ['Halo! Siap kirim file', 'Jalan lincah keliling'],
     shirtMain: '#d97706',
     shirtTrim: '#fef3c7',
     pantsColor: '#1e293b',
     hairColor: '#111827',
+    cupColor: '#60a5fa',
     styleType: 'courier',
-    deskRatioX: 0.46,
+    deskRatioX: 0.43,
     deskRatioY: 0.75,
-    roamBox: { minX: 0.36, maxX: 0.56, minY: 0.54, maxY: 0.72 }
+    roamBox: { minX: 0.33, maxX: 0.51, minY: 0.54, maxY: 0.72 }
   }
 ];
 
@@ -224,7 +242,6 @@ interface SimAgent {
   bubbleTimer: number;
   walkPhase: number;
   chillPhase: number;
-  facing: 1 | -1;
 }
 
 function roundRectPath(
@@ -271,7 +288,7 @@ function drawLushPlant(ctx: CanvasRenderingContext2D, x: number, y: number) {
   });
 }
 
-const RealisticVirtualOfficeCanvas: React.FC<{
+const LivingOfficeCanvas: React.FC<{
   isAnyWorking: boolean;
   activeStageIdx: number;
   chaptersDone: number;
@@ -301,37 +318,38 @@ const RealisticVirtualOfficeCanvas: React.FC<{
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 5 kursi/titik ngopi terpisah & 5 kursi/titik smoking terpisah agar tidak pernah bertumpuk
+    // Titik ngopi di pantry dalam ruangan
     const coffeeSpots = [
-      { rx: 0.72, ry: 0.37 },
-      { rx: 0.79, ry: 0.45 },
-      { rx: 0.86, ry: 0.37 },
-      { rx: 0.91, ry: 0.46 },
-      { rx: 0.76, ry: 0.49 }
-    ];
-    const smokeSpots = [
-      { rx: 0.72, ry: 0.71 },
-      { rx: 0.8, ry: 0.69 },
-      { rx: 0.88, ry: 0.71 },
-      { rx: 0.75, ry: 0.83 },
-      { rx: 0.86, ry: 0.83 }
+      { rx: 0.65, ry: 0.42 },
+      { rx: 0.72, ry: 0.48 },
+      { rx: 0.65, ry: 0.53 },
+      { rx: 0.73, ry: 0.39 },
+      { rx: 0.68, ry: 0.54 }
     ];
 
-    const initialModes: IdleModeType[] = ['coffee', 'smoke', 'stroll', 'coffee', 'smoke'];
+    // Titik merokok di balkon / teras luar ruangan (dilarang merokok di dalam kantor)
+    const balconySpots = [
+      { rx: 0.83, ry: 0.38 },
+      { rx: 0.91, ry: 0.44 },
+      { rx: 0.84, ry: 0.58 },
+      { rx: 0.92, ry: 0.68 },
+      { rx: 0.85, ry: 0.82 }
+    ];
+
+    const initialModes: IdleModeType[] = ['coffee', 'balcony_smoke', 'stroll', 'coffee', 'balcony_smoke'];
 
     const agents: SimAgent[] = WORKER_PROFILES.map((w, i) => ({
-      x: 150 + i * 115,
+      x: 130 + i * 110,
       y: i < 3 ? 195 : 275,
-      targetX: 210 + i * 85,
+      targetX: 200 + i * 80,
       targetY: 225,
       mode: initialModes[i],
       atSpot: false,
-      modeTimer: 4.5 + i * 1.3,
+      modeTimer: 4.5 + i * 1.2,
       bubbleIdx: i,
       bubbleTimer: 0,
       walkPhase: i * 1.4,
-      chillPhase: i * 0.8,
-      facing: 1
+      chillPhase: i * 0.9
     }));
 
     let rafId = 0;
@@ -348,8 +366,8 @@ const RealisticVirtualOfficeCanvas: React.FC<{
         const spot = coffeeSpots[idx % coffeeSpots.length];
         return { x: spot.rx * w, y: spot.ry * h };
       }
-      if (mode === 'smoke') {
-        const spot = smokeSpots[idx % smokeSpots.length];
+      if (mode === 'balcony_smoke') {
+        const spot = balconySpots[idx % balconySpots.length];
         return { x: spot.rx * w, y: spot.ry * h };
       }
       const box = WORKER_PROFILES[idx].roamBox;
@@ -366,10 +384,10 @@ const RealisticVirtualOfficeCanvas: React.FC<{
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      const parentWidth = canvas.parentElement?.clientWidth || 880;
+      const parentWidth = canvas.parentElement?.clientWidth || 900;
       const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-      const logicalW = Math.max(400, parentWidth);
-      const logicalH = 390;
+      const logicalW = Math.max(420, parentWidth);
+      const logicalH = 400;
 
       if (canvas.width !== Math.round(logicalW * dpr) || canvas.height !== Math.round(logicalH * dpr)) {
         canvas.width = Math.round(logicalW * dpr);
@@ -379,98 +397,89 @@ const RealisticVirtualOfficeCanvas: React.FC<{
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // 1. Dinding atas hangat & wainscoting
+      // 1. Dinding atas kantor + papan aturan DILARANG MEROKOK DI DALAM
       const wallGrad = ctx.createLinearGradient(0, 0, 0, logicalH * 0.25);
       wallGrad.addColorStop(0, '#cbd5e1');
       wallGrad.addColorStop(1, '#f1f5f9');
       ctx.fillStyle = wallGrad;
       ctx.fillRect(0, 0, logicalW, logicalH * 0.25);
 
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(0, logicalH * 0.19, logicalW, logicalH * 0.06);
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(0, logicalH * 0.19);
-      ctx.lineTo(logicalW, logicalH * 0.19);
+      // Papan aturan dilarang merokok di dalam ruangan
+      const signX = logicalW * 0.34;
+      const signY = 10;
+      const signW = logicalW * 0.32;
+      const signH = 22;
+      ctx.fillStyle = '#fef2f2';
+      roundRectPath(ctx, signX, signY, signW, signH, 6);
+      ctx.fill();
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      // Jendela berkisi + sinar matahari
-      [0.19, 0.47, 0.78].forEach((ratio) => {
+      ctx.font = 'bold 9.5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillText('DILARANG MEROKOK DI DALAM KANTOR — GUNAKAN TERAS LUAR', signX + signW / 2, signY + 14.5);
+
+      // Jendela kantor
+      [0.16, 0.84].forEach((ratio) => {
         const wx = logicalW * ratio;
         const wy = 13;
-        const ww = 70;
-        const wh = 44;
-
+        const ww = 66;
+        const wh = 42;
         ctx.fillStyle = '#7dd3fc';
         roundRectPath(ctx, wx - ww / 2, wy, ww, wh, 6);
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
         ctx.stroke();
-
-        // Awan kecil di jendela
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-        ctx.beginPath();
-        ctx.arc(wx - 10, wy + 16, 6, 0, Math.PI * 2);
-        ctx.arc(wx - 4, wy + 14, 7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Palang kisi jendela
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(wx, wy);
-        ctx.lineTo(wx, wy + wh);
-        ctx.moveTo(wx - ww / 2, wy + wh / 2);
-        ctx.lineTo(wx + ww / 2, wy + wh / 2);
-        ctx.stroke();
-
-        // Cahaya matahari hangat miring
-        const sunGrad = ctx.createLinearGradient(wx, wy + wh, wx + 25, logicalH * 0.65);
-        sunGrad.addColorStop(0, 'rgba(254, 240, 138, 0.28)');
-        sunGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
-        ctx.fillStyle = sunGrad;
-        ctx.beginPath();
-        ctx.moveTo(wx - ww / 2, wy + wh);
-        ctx.lineTo(wx + ww / 2, wy + wh);
-        ctx.lineTo(wx + ww * 0.9, logicalH * 0.65);
-        ctx.lineTo(wx - ww * 0.4, logicalH * 0.65);
-        ctx.closePath();
-        ctx.fill();
       });
 
-      // 2. Lantai kayu hangat berpola papan
+      // 2. Lantai kayu hangat di dalam kantor
       const floorGrad = ctx.createLinearGradient(0, logicalH * 0.25, 0, logicalH);
       floorGrad.addColorStop(0, '#edd69e');
       floorGrad.addColorStop(1, '#d9b573');
       ctx.fillStyle = floorGrad;
-      ctx.fillRect(0, logicalH * 0.25, logicalW, logicalH * 0.75);
+      ctx.fillRect(0, logicalH * 0.25, logicalW * 0.78, logicalH * 0.75);
 
-      ctx.strokeStyle = 'rgba(120, 53, 15, 0.14)';
-      ctx.lineWidth = 1;
-      for (let py = logicalH * 0.27; py < logicalH; py += 24) {
-        ctx.beginPath();
-        ctx.moveTo(0, py);
-        ctx.lineTo(logicalW, py);
-        ctx.stroke();
-      }
+      // 3. Teras / Balkon Smoking Area di luar (kanan)
+      const balX = logicalW * 0.78;
+      const balY = logicalH * 0.25;
+      const balW = logicalW * 0.22;
+      const balH = logicalH * 0.75;
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(balX, balY, balW, balH);
+      ctx.strokeStyle = '#64748b';
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(balX, balY);
+      ctx.lineTo(balX, balY + balH);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-      // 3. Zona Kerja Utama (kiri)
-      const wzX = logicalW * 0.035;
-      const wzY = logicalH * 0.28;
-      const wzW = logicalW * 0.61;
-      const wzH = logicalH * 0.67;
+      ctx.font = 'bold 9.5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText('TERAS SMOKING (LUAR)', balX + balW / 2, balY + 16);
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.2)';
-      roundRectPath(ctx, wzX + 3, wzY + 4, wzW, wzH, 16);
+      // Kursi santai & asbak di teras luar
+      ctx.fillStyle = '#475569';
+      roundRectPath(ctx, balX + balW * 0.5 - 26, balY + 75, 52, 14, 4);
+      ctx.fill();
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(balX + balW * 0.5, balY + 115, 6, 0, Math.PI * 2);
       ctx.fill();
 
-      const carpetGrad = ctx.createLinearGradient(0, wzY, 0, wzY + wzH);
-      carpetGrad.addColorStop(0, '#1e3a8a');
-      carpetGrad.addColorStop(1, '#172554');
-      ctx.fillStyle = carpetGrad;
-      roundRectPath(ctx, wzX, wzY, wzW, wzH, 16);
+      // 4. Zona Kerja Pipeline (kiri)
+      const wzX = logicalW * 0.03;
+      const wzY = logicalH * 0.28;
+      const wzW = logicalW * 0.525;
+      const wzH = logicalH * 0.67;
+
+      ctx.fillStyle = '#1e3a8a';
+      roundRectPath(ctx, wzX, wzY, wzW, wzH, 15);
       ctx.fill();
       ctx.strokeStyle = '#60a5fa';
       ctx.lineWidth = 2;
@@ -479,13 +488,13 @@ const RealisticVirtualOfficeCanvas: React.FC<{
       ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#93c5fd';
-      ctx.fillText('STUDIO PIPELINE & MEJA KERJA', wzX + 14, wzY + 18);
+      ctx.fillText('RUANG KERJA PIPELINE', wzX + 12, wzY + 17);
 
-      // 4. Area Ngopi & Pantry (kanan atas)
-      const czX = logicalW * 0.67;
+      // 5. Area Ngopi & Santai Minuman/Camilan (tengah-kanan dalam ruangan)
+      const czX = logicalW * 0.57;
       const czY = logicalH * 0.28;
-      const czW = logicalW * 0.295;
-      const czH = logicalH * 0.31;
+      const czW = logicalW * 0.195;
+      const czH = logicalH * 0.67;
 
       ctx.fillStyle = '#fef3c7';
       roundRectPath(ctx, czX, czY, czW, czH, 15);
@@ -495,66 +504,20 @@ const RealisticVirtualOfficeCanvas: React.FC<{
       ctx.stroke();
 
       ctx.fillStyle = '#92400e';
-      ctx.fillText('AREA NGOPI & PANTRY', czX + 12, czY + 17);
+      ctx.fillText('PANTRY KOPI & TEH', czX + 10, czY + 17);
 
-      // Meja counter kopi & mesin kopi
-      const counterX = czX + czW * 0.5;
-      const counterY = czY + czH * 0.34;
+      // Meja counter kopi
+      const barX = czX + czW * 0.5;
+      const barY = czY + 42;
       ctx.fillStyle = '#78350f';
-      roundRectPath(ctx, counterX - 42, counterY - 7, 84, 15, 4);
-      ctx.fill();
-      ctx.fillStyle = '#b45309';
-      roundRectPath(ctx, counterX - 44, counterY - 9, 88, 5, 2.5);
-      ctx.fill();
-
-      // Mesin kopi merah/hitam + cangkir
-      ctx.fillStyle = '#dc2626';
-      roundRectPath(ctx, counterX - 24, counterY - 20, 14, 12, 2);
+      roundRectPath(ctx, barX - 30, barY - 6, 60, 14, 4);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(counterX + 6, counterY - 14, 7, 6);
-      ctx.fillRect(counterX + 18, counterY - 14, 7, 6);
+      ctx.fillRect(barX - 14, barY - 12, 6, 6);
+      ctx.fillRect(barX + 6, barY - 12, 6, 6);
 
-      // 5. Area Istirahat & Smoking Area (kanan bawah)
-      const szX = logicalW * 0.67;
-      const szY = logicalH * 0.615;
-      const szW = logicalW * 0.295;
-      const szH = logicalH * 0.335;
-
-      ctx.fillStyle = '#ecfdf5';
-      roundRectPath(ctx, szX, szY, szW, szH, 15);
-      ctx.fill();
-      ctx.strokeStyle = '#059669';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.fillStyle = '#065f46';
-      ctx.fillText('ISTIRAHAT & SMOKING AREA', szX + 12, szY + 17);
-
-      // Sofa santai & meja asbak
-      const sofaX = szX + szW * 0.5;
-      const sofaY = szY + szH * 0.36;
-      ctx.fillStyle = '#047857';
-      roundRectPath(ctx, sofaX - 42, sofaY - 8, 84, 16, 5);
-      ctx.fill();
-      ctx.fillStyle = '#34d399';
-      roundRectPath(ctx, sofaX - 38, sofaY - 6, 36, 11, 3);
-      ctx.fill();
-      roundRectPath(ctx, sofaX + 2, sofaY - 6, 36, 11, 3);
-      ctx.fill();
-
-      // Meja bundar asbak
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.arc(sofaX, sofaY + 20, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.arc(sofaX, sofaY + 20, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      drawLushPlant(ctx, wzX + 20, wzY + wzH - 18);
-      drawLushPlant(ctx, szX + szW - 18, szY + szH - 18);
+      drawLushPlant(ctx, wzX + 18, wzY + wzH - 18);
+      drawLushPlant(ctx, czX + czW - 18, czY + czH - 18);
 
       const {
         isAnyWorking: working,
@@ -564,40 +527,31 @@ const RealisticVirtualOfficeCanvas: React.FC<{
         lastWords: lw
       } = stateRef.current;
 
-      // 6. Gambar 5 meja kerja utama dengan kursi & monitor
+      // 6. Gambar 5 meja kerja utama
       WORKER_PROFILES.forEach((w, idx) => {
         const dx = w.deskRatioX * logicalW;
         const dy = w.deskRatioY * logicalH;
         const isFocus = working && idx === activeIdx;
 
-        // Kursi di belakang meja
         ctx.fillStyle = '#334155';
-        roundRectPath(ctx, dx - 11, dy - 22, 22, 10, 4);
+        roundRectPath(ctx, dx - 10, dy - 20, 20, 9, 3.5);
         ctx.fill();
 
-        // Bayangan meja
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        roundRectPath(ctx, dx - 30, dy - 7, 60, 20, 5);
-        ctx.fill();
-
-        // Permukaan meja kayu hangat
         ctx.fillStyle = isFocus ? '#fde047' : '#d97706';
-        roundRectPath(ctx, dx - 30, dy - 10, 60, 17, 5);
+        roundRectPath(ctx, dx - 26, dy - 10, 52, 16, 4.5);
         ctx.fill();
         ctx.strokeStyle = isFocus ? '#ca8a04' : '#78350f';
-        ctx.lineWidth = isFocus ? 2.2 : 1.4;
+        ctx.lineWidth = isFocus ? 2 : 1.3;
         ctx.stroke();
 
-        // Monitor + stand
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(dx - 3, dy - 11, 6, 4);
-        roundRectPath(ctx, dx - 12, dy - 22, 24, 12, 2.5);
+        ctx.fillStyle = '#0f172a';
+        roundRectPath(ctx, dx - 10, dy - 20, 20, 11, 2);
         ctx.fill();
         ctx.fillStyle = isFocus ? '#4ade80' : '#38bdf8';
-        ctx.fillRect(dx - 9.5, dy - 19.5, 19, 7.5);
+        ctx.fillRect(dx - 8, dy - 18, 16, 7);
       });
 
-      // 7. Update posisi & aktivitas santai/kerja 5 karakter
+      // 7. Update posisi & aktivitas pekerja
       agents.forEach((ag, idx) => {
         const prof = WORKER_PROFILES[idx];
         const isWorkerActive = working && idx === activeIdx;
@@ -607,19 +561,19 @@ const RealisticVirtualOfficeCanvas: React.FC<{
 
         if (isWorkerActive) {
           goalX = prof.deskRatioX * logicalW;
-          goalY = prof.deskRatioY * logicalH + 21;
+          goalY = prof.deskRatioY * logicalH + 20;
           ag.atSpot = false;
         } else if (working) {
-          goalX = prof.deskRatioX * logicalW + 18;
-          goalY = prof.deskRatioY * logicalH + 24;
+          goalX = prof.deskRatioX * logicalW + 16;
+          goalY = prof.deskRatioY * logicalH + 23;
           ag.atSpot = false;
         } else {
           ag.modeTimer -= dt;
           if (ag.modeTimer <= 0) {
-            const order: IdleModeType[] = ['coffee', 'smoke', 'stroll'];
-            const nextMode = order[(order.indexOf(ag.mode) + 1) % order.length];
+            const cycle: IdleModeType[] = ['coffee', 'stroll', 'balcony_smoke'];
+            const nextMode = cycle[(cycle.indexOf(ag.mode) + 1) % cycle.length];
             ag.mode = nextMode;
-            ag.modeTimer = nextMode === 'stroll' ? 4.2 : 6.8;
+            ag.modeTimer = nextMode === 'stroll' ? 4 : 6.5;
             const nextPos = pickTargetForMode(idx, nextMode, logicalW, logicalH, now);
             ag.targetX = nextPos.x;
             ag.targetY = nextPos.y;
@@ -633,21 +587,20 @@ const RealisticVirtualOfficeCanvas: React.FC<{
 
         let moving = false;
         if (dist > 3.5) {
-          const speed = isWorkerActive ? 105 : 50;
+          const speed = isWorkerActive ? 105 : 52;
           const step = Math.min(dist, speed * dt);
           ag.x += (dx / dist) * step;
           ag.y += (dy / dist) * step;
-          ag.walkPhase += dt * 9;
-          ag.facing = dx >= 0 ? 1 : -1;
+          ag.walkPhase += dt * 9.5;
           moving = true;
           ag.atSpot = false;
-        } else if (!working && (ag.mode === 'coffee' || ag.mode === 'smoke')) {
+        } else if (!working && (ag.mode === 'coffee' || ag.mode === 'balcony_smoke')) {
           ag.atSpot = true;
         }
 
-        ag.x = Math.max(30, Math.min(logicalW - 30, ag.x));
+        ag.x = Math.max(28, Math.min(logicalW - 26, ag.x));
         ag.y = Math.max(logicalH * 0.34, Math.min(logicalH - 24, ag.y));
-        ag.chillPhase += dt * 2.5;
+        ag.chillPhase += dt * 2.6;
 
         ag.bubbleTimer += dt;
         if (ag.bubbleTimer >= 3.2) {
@@ -655,7 +608,6 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           ag.bubbleIdx = (ag.bubbleIdx + 1) % 2;
         }
 
-        // Simpan status gerak sementara di properti pada objek lewat closure map
         (ag as SimAgent & { _moving?: boolean })._moving = moving;
       });
 
@@ -667,34 +619,33 @@ const RealisticVirtualOfficeCanvas: React.FC<{
         const isWorkerActive = working && idx === activeIdx;
         const moving = Boolean((ag as SimAgent & { _moving?: boolean })._moving);
         const chillingCoffee = !working && ag.mode === 'coffee' && ag.atSpot;
-        const chillingSmoke = !working && ag.mode === 'smoke' && ag.atSpot;
+        const chillingBalconySmoke = !working && ag.mode === 'balcony_smoke' && ag.atSpot;
 
         const waddleTilt = moving ? Math.sin(ag.walkPhase) * 0.08 : 0;
         const bounceY = moving
           ? Math.abs(Math.sin(ag.walkPhase)) * -3.5
           : isWorkerActive
             ? Math.sin(now / 120) * -2
-            : chillingCoffee || chillingSmoke
+            : chillingCoffee || chillingBalconySmoke
               ? Math.sin(ag.chillPhase) * -1.4
               : 0;
 
         const px = ag.x;
         const py = ag.y + bounceY;
 
-        // Bayangan kaki
         ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
         ctx.beginPath();
-        ctx.ellipse(ag.x, ag.y + 17, 11, 3.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(ag.x, ag.y + 17, 10.5, 3.4, 0, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.save();
         ctx.translate(px, py);
         ctx.rotate(waddleTilt);
 
-        // Kaki & sepatu
+        // Kaki
         const legSwing = moving ? Math.sin(ag.walkPhase) * 5 : 0;
         ctx.strokeStyle = prof.pantsColor;
-        ctx.lineWidth = 3.4;
+        ctx.lineWidth = 3.2;
         ctx.lineCap = 'round';
         ctx.beginPath();
         if (ag.atSpot) {
@@ -704,37 +655,35 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           ctx.lineTo(6, 13);
         } else {
           ctx.moveTo(-4, 7);
-          ctx.lineTo(-4 + legSwing, 16.5);
+          ctx.lineTo(-4 + legSwing, 16);
           ctx.moveTo(4, 7);
-          ctx.lineTo(4 - legSwing, 16.5);
+          ctx.lineTo(4 - legSwing, 16);
         }
         ctx.stroke();
 
-        // Sepatu kecil
+        // Sepatu
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-7.5 + (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15.5, 5, 2.5);
-        ctx.fillRect(2.5 - (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15.5, 5, 2.5);
+        ctx.fillRect(-7.5 + (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
+        ctx.fillRect(2.5 - (moving ? legSwing : 0), ag.atSpot ? 12.5 : 15, 5, 2.5);
 
-        // Badan kemeja + kerah/saku
+        // Badan kemeja + kerah
         ctx.fillStyle = prof.shirtMain;
         roundRectPath(ctx, -8.5, -6, 17, 13.5, 4.5);
         ctx.fill();
         ctx.fillStyle = prof.shirtTrim;
         ctx.fillRect(-3, -6, 6, 3);
 
-        // Lengan & gestur santai/kerja
+        // Lengan
         const armWave = moving
           ? -legSwing * 0.75
           : isWorkerActive
             ? Math.cos(now / 95) * 3.5
             : chillingCoffee
-              ? Math.sin(ag.chillPhase * 1.3) * 2.5
-              : chillingSmoke
-                ? Math.cos(ag.chillPhase * 0.9) * 2
-                : Math.sin(ag.chillPhase) * 1.5;
+              ? Math.sin(ag.chillPhase * 1.4) * 2.5
+              : Math.sin(ag.chillPhase) * 1.6;
 
         ctx.strokeStyle = '#fcd34d';
-        ctx.lineWidth = 2.7;
+        ctx.lineWidth = 2.6;
         ctx.beginPath();
         ctx.moveTo(-8.5, -2);
         ctx.lineTo(-12.5, 4 + armWave);
@@ -742,12 +691,12 @@ const RealisticVirtualOfficeCanvas: React.FC<{
         ctx.lineTo(12.5, 4 - armWave);
         ctx.stroke();
 
-        // Cangkir kopi + uap saat ngopi
+        // Gelas minuman kesukaan + uap saat ngopi/ngeteh
         if (chillingCoffee) {
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = prof.cupColor;
           roundRectPath(ctx, 10, -1 + armWave * 0.4, 7.5, 6.5, 1.5);
           ctx.fill();
-          ctx.strokeStyle = '#78350f';
+          ctx.strokeStyle = '#475569';
           ctx.lineWidth = 1;
           ctx.stroke();
 
@@ -760,9 +709,9 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           ctx.stroke();
         }
 
-        // Rokok + kepulan asap santai saat di smoking area
-        if (chillingSmoke) {
-          ctx.strokeStyle = '#f8fafc';
+        // Rokok & asap khusus di teras balkon luar
+        if (chillingBalconySmoke) {
+          ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.2;
           ctx.beginPath();
           ctx.moveTo(5, -11);
@@ -775,16 +724,16 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           for (let p = 0; p < 3; p++) {
             const prog = (ag.chillPhase * 0.35 + p * 0.33) % 1;
             const sx = 13 + prog * 13;
-            const sy = -13 - prog * 19;
-            const sr = 2.2 + prog * 4.2;
-            ctx.fillStyle = `rgba(226, 232, 240, ${(1 - prog) * 0.78})`;
+            const sy = -13 - prog * 18;
+            const sr = 2.2 + prog * 4;
+            ctx.fillStyle = `rgba(241, 245, 249, ${(1 - prog) * 0.75})`;
             ctx.beginPath();
             ctx.arc(sx, sy, sr, 0, Math.PI * 2);
             ctx.fill();
           }
         }
 
-        // Kepala
+        // Kepala & ekspresi sesuai sifat
         ctx.fillStyle = '#fde68a';
         roundRectPath(ctx, -7.8, -21, 15.6, 15, 5.2);
         ctx.fill();
@@ -792,7 +741,6 @@ const RealisticVirtualOfficeCanvas: React.FC<{
         ctx.lineWidth = 1.1;
         ctx.stroke();
 
-        // Rambut / gaya khas karakter
         ctx.fillStyle = prof.hairColor;
         if (prof.styleType === 'curly') {
           ctx.beginPath();
@@ -809,7 +757,6 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           ctx.fill();
         }
 
-        // Mata & kacamata opsional
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
         ctx.arc(-3.2, -13.5, 1.4, 0, Math.PI * 2);
@@ -825,16 +772,16 @@ const RealisticVirtualOfficeCanvas: React.FC<{
 
         ctx.restore();
 
-        // Label jabatan kecil di bawah kaki
-        ctx.font = 'bold 9.5px sans-serif';
+        // Label peran kecil
+        ctx.font = 'bold 9.2px sans-serif';
         ctx.textAlign = 'center';
         const tagText = prof.roleTitle;
         const tagW = ctx.measureText(tagText).width + 10;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        roundRectPath(ctx, px - tagW / 2, py + 19.5, tagW, 13.5, 6.5);
+        roundRectPath(ctx, px - tagW / 2, py + 19, tagW, 13, 6.5);
         ctx.fill();
         ctx.fillStyle = '#0f172a';
-        ctx.fillText(tagText, px, py + 29);
+        ctx.fillText(tagText, px, py + 28.5);
 
         // Speech bubble anti-tumpuk
         let bubbleText = prof.strollBubbles[ag.bubbleIdx % prof.strollBubbles.length];
@@ -847,15 +794,15 @@ const RealisticVirtualOfficeCanvas: React.FC<{
           bubbleText = 'Siaga di meja';
         } else if (chillingCoffee) {
           bubbleText = prof.coffeeBubbles[ag.bubbleIdx % prof.coffeeBubbles.length];
-        } else if (chillingSmoke) {
-          bubbleText = prof.smokeBubbles[ag.bubbleIdx % prof.smokeBubbles.length];
+        } else if (chillingBalconySmoke) {
+          bubbleText = prof.balconyBubbles[ag.bubbleIdx % prof.balconyBubbles.length];
         }
 
-        ctx.font = 'bold 9.5px sans-serif';
-        const textW = Math.min(156, ctx.measureText(bubbleText).width + 14);
-        const bh = 18.5;
-        let bx = Math.max(8, Math.min(logicalW - textW - 8, px - textW / 2));
-        let by = Math.max(8, py - 45);
+        ctx.font = 'bold 9.2px sans-serif';
+        const textW = Math.min(164, ctx.measureText(bubbleText).width + 14);
+        const bh = 18;
+        let bx = Math.max(6, Math.min(logicalW - textW - 6, px - textW / 2));
+        let by = Math.max(36, py - 44);
 
         for (let attempt = 0; attempt < 5; attempt++) {
           const overlaps = placedBubbles.some(
@@ -866,19 +813,19 @@ const RealisticVirtualOfficeCanvas: React.FC<{
               by + bh + 3 > b.y
           );
           if (!overlaps) break;
-          by = Math.max(6, by - 20.5);
+          by = Math.max(36, by - 20);
         }
         placedBubbles.push({ x: bx, y: by, w: textW, h: bh });
 
         ctx.fillStyle = isWorkerActive ? '#0f172a' : '#ffffff';
         roundRectPath(ctx, bx, by, textW, bh, 9);
         ctx.fill();
-        ctx.strokeStyle = isWorkerActive ? '#34d399' : chillingSmoke ? '#059669' : '#64748b';
+        ctx.strokeStyle = isWorkerActive ? '#34d399' : chillingBalconySmoke ? '#dc2626' : '#64748b';
         ctx.lineWidth = isWorkerActive ? 1.5 : 1.1;
         ctx.stroke();
 
         ctx.fillStyle = isWorkerActive ? '#ffffff' : '#0f172a';
-        ctx.fillText(bubbleText, bx + textW / 2, by + 12.2);
+        ctx.fillText(bubbleText, bx + textW / 2, by + 12);
       });
 
       ctx.restore();
@@ -894,7 +841,7 @@ const RealisticVirtualOfficeCanvas: React.FC<{
       ref={canvasRef}
       style={{
         width: '100%',
-        height: 390,
+        height: 400,
         display: 'block',
         borderRadius: 12,
         border: '1px solid #cbd5e1',
@@ -1078,6 +1025,34 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         .chip-idle {
           background: #fef3c7;
           color: #92400e;
+        }
+
+        .cn-roster-grid {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(120px, 1fr));
+          gap: 8px;
+          margin-top: 10px;
+        }
+        @media (max-width: 820px) {
+          .cn-roster-grid {
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+          }
+        }
+        .cn-roster-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 7px 9px;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+        .cn-roster-name {
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .cn-roster-meta {
+          color: #475569;
+          font-size: 10.5px;
         }
 
         .cn-stations-grid {
@@ -1275,21 +1250,31 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
             <span className="cn-floor-sub">
               {isAnyWorking
                 ? `Pekerja aktif bekerja di stasiun #${activeStageIdx + 1} (${WORKER_PROFILES[activeStageIdx]?.roleTitle}).`
-                : 'Tidak ada pekerjaan — pekerja berjalan santai, ngopi di pantry, atau duduk merokok di smoking area.'}
+                : 'Tanpa pekerjaan aktif — pekerja ngopi/ngeteh di pantry, jalan santai, atau merokok di teras luar (dilarang merokok di dalam).'}
             </span>
           </div>
           <span className={`cn-floor-chip ${isAnyWorking ? 'chip-work' : 'chip-idle'}`}>
-            {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE SANTAI · NGOPI & SMOKING'}
+            {isAnyWorking ? 'MODE KERJA AKTIF' : 'MODE SANTAI · NO SMOKING INDOOR'}
           </span>
         </div>
 
-        <RealisticVirtualOfficeCanvas
+        <LivingOfficeCanvas
           isAnyWorking={isAnyWorking}
           activeStageIdx={activeStageIdx}
           chaptersDone={activeSlot?.chaptersDone || 0}
           totalChapters={totalChapters}
           lastWords={activeSlot?.lastWords}
         />
+
+        <div className="cn-roster-grid">
+          {WORKER_PROFILES.map((w) => (
+            <div key={w.key} className="cn-roster-card">
+              <div className="cn-roster-name">{w.roleTitle}</div>
+              <div className="cn-roster-meta">Sifat: {w.trait}</div>
+              <div className="cn-roster-meta">Kesukaan: {w.favorite}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="cn-stations-grid">
