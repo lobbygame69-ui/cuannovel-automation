@@ -54,6 +54,109 @@ function extractJsonObject(raw: string): Record<string, unknown> | null {
   }
 }
 
+function parseStreamedNovelkuResponse(rawText: string): {
+  ok?: boolean;
+  error?: string;
+  data?: { chapter_title?: string; content?: string };
+} {
+  const cleaned = String(rawText || '').trim();
+  if (!cleaned) {
+    throw new Error('Respons dari NOVELKU AI kosong.');
+  }
+
+  // NOVELKU AI mengirim spasi heartbeat lalu diakhiri JSON pada baris/objek terakhir
+  for (let i = cleaned.lastIndexOf('{'); i !== -1; i = cleaned.lastIndexOf('{', i - 1)) {
+    const candidate = cleaned.slice(i).trim();
+    try {
+      return JSON.parse(candidate) as {
+        ok?: boolean;
+        error?: string;
+        data?: { chapter_title?: string; content?: string };
+      };
+    } catch {
+      // lanjut cari posisi '{' sebelumnya jika JSON belum lengkap
+    }
+  }
+
+  throw new Error(`Format respons NOVELKU AI tidak valid: ${cleaned.slice(0, 200)}`);
+}
+
+async function generateChapterViaNovelkuAi(params: {
+  project: ProjectRow;
+  slot: CuanNovelQueueItem;
+  nextChapterNum: number;
+  isEn: boolean;
+}): Promise<{ chapterTitle: string; content: string; provider: string }> {
+  const novelkuUrl = getEnv('NOVELKU_AI_URL').replace(/\/+$/, '');
+  const novelkuSecret =
+    getEnv('NOVELKU_WORKER_SECRET') || getEnv('CRON_SECRET');
+
+  if (!novelkuUrl) {
+    throw new Error('NOVELKU_AI_URL belum diatur di Environment Variables Vercel.');
+  }
+  if (!novelkuSecret) {
+    throw new Error('NOVELKU_WORKER_SECRET (atau CRON_SECRET) belum diatur di Environment Variables Vercel.');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const res = await fetch(`${novelkuUrl}/api/ai`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${novelkuSecret}`
+      },
+      body: JSON.stringify({
+        action: 'write_chapter',
+        payload: {
+          project_id: params.project.id,
+          title: params.project.title,
+          pen_name: params.project.pen_name,
+          genre: params.project.genre,
+          synopsis: params.project.synopsis,
+          language: params.isEn ? 'English' : 'Indonesian',
+          chapter_number: params.nextChapterNum,
+          target_chapters: params.slot.target_chapters || 20,
+          revision_note: params.slot.curator_feedback || ''
+        }
+      }),
+      signal: controller.signal,
+      cache: 'no-store'
+    });
+
+    const rawText = await res.text();
+    if (!res.ok) {
+      throw new Error(`NOVELKU AI HTTP ${res.status}: ${rawText.slice(0, 220)}`);
+    }
+
+    const parsed = parseStreamedNovelkuResponse(rawText);
+    if (parsed.ok === false || !parsed.data?.content) {
+      throw new Error(parsed.error || 'NOVELKU AI tidak mengembalikan konten bab.');
+    }
+
+    const chapterTitle = String(
+      parsed.data.chapter_title ||
+        `${params.isEn ? 'Chapter' : 'Bab'} ${params.nextChapterNum}`
+    ).trim();
+    const content = String(parsed.data.content).trim();
+
+    return {
+      chapterTitle,
+      content,
+      provider: 'novelku-ai:/api/ai'
+    };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Permintaan ke NOVELKU AI melewati batas waktu 45 detik.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function callGeminiText(prompt: string, apiKey: string): Promise<string | null> {
   if (!apiKey) return null;
   const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
@@ -400,26 +503,12 @@ export async function POST(req: NextRequest) {
       }
 
       const nextChapterNum = (slot.current_chapter || 0) + 1;
-      const langInstruction = isEn
-        ? 'Write strictly in English. Target around 1,150-1,400 words (strictly >= 1,000 words).'
-        : 'Tulis secara ketat dalam Bahasa Indonesia. Target sekitar 1.150–1.400 kata (wajib >= 1.000 kata).';
-
-      const prompt = [
-        langInstruction,
-        `Novel Title: ${project.title}`,
-        `Genre: ${project.genre}`,
-        `Synopsis: ${project.synopsis}`,
-        `Chapter Number: ${nextChapterNum} of ${slot.target_chapters || 20}`,
-        slot.curator_feedback ? `Revision Note: ${slot.curator_feedback}` : '',
-        'Return ONLY valid JSON with keys: {"chapter_title":"...","content":"..."}'
-      ]
-        .filter(Boolean)
-        .join('\n\n');
-
-      const { text } = await generateWithFailover(prompt);
-      const parsed = extractJsonObject(text);
-      const chapterTitle = String(parsed?.chapter_title || `${isEn ? 'Chapter' : 'Bab'} ${nextChapterNum}`).trim();
-      const content = String(parsed?.content || text).trim();
+      const { chapterTitle, content, provider } = await generateChapterViaNovelkuAi({
+        project,
+        slot,
+        nextChapterNum,
+        isEn
+      });
       const words = countWords(content);
 
       if (words < 1000 && (slot.chapter_retry_count || 0) < 2) {
@@ -431,7 +520,7 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString()
           })
         });
-        return NextResponse.json({ ok: true, retriedChapter: nextChapterNum, words });
+        return NextResponse.json({ ok: true, retriedChapter: nextChapterNum, words, provider });
       }
 
       await sbFetch('chapters', {
@@ -469,6 +558,7 @@ export async function POST(req: NextRequest) {
         slot: slot.sequence_no,
         chapter: nextChapterNum,
         words,
+        provider,
         nextStage: doneAllChapters ? 'curator_audit' : 'novelku_production'
       });
     }
