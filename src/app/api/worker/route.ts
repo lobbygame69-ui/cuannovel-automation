@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  auditNovelBeforePackaging,
+  buildRetryChapterInstruction,
   CuanNovelBatch,
   CuanNovelQueueItem,
   getEnv,
@@ -64,7 +66,6 @@ function parseStreamedNovelkuResponse(rawText: string): {
     throw new Error('Respons dari NOVELKU AI kosong.');
   }
 
-  // NOVELKU AI mengirim spasi heartbeat lalu diakhiri JSON pada baris/objek terakhir
   for (let i = cleaned.lastIndexOf('{'); i !== -1; i = cleaned.lastIndexOf('{', i - 1)) {
     const candidate = cleaned.slice(i).trim();
     try {
@@ -74,7 +75,7 @@ function parseStreamedNovelkuResponse(rawText: string): {
         data?: { chapter_title?: string; content?: string };
       };
     } catch {
-      // lanjut cari posisi '{' sebelumnya jika JSON belum lengkap
+      // lanjut cari '{' sebelumnya
     }
   }
 
@@ -86,10 +87,10 @@ async function generateChapterViaNovelkuAi(params: {
   slot: CuanNovelQueueItem;
   nextChapterNum: number;
   isEn: boolean;
+  previousShortWords?: number;
 }): Promise<{ chapterTitle: string; content: string; provider: string }> {
   const novelkuUrl = getEnv('NOVELKU_AI_URL').replace(/\/+$/, '');
-  const novelkuSecret =
-    getEnv('NOVELKU_WORKER_SECRET') || getEnv('CRON_SECRET');
+  const novelkuSecret = getEnv('NOVELKU_WORKER_SECRET') || getEnv('CRON_SECRET');
 
   if (!novelkuUrl) {
     throw new Error('NOVELKU_AI_URL belum diatur di Environment Variables Vercel.');
@@ -97,6 +98,17 @@ async function generateChapterViaNovelkuAi(params: {
   if (!novelkuSecret) {
     throw new Error('NOVELKU_WORKER_SECRET (atau CRON_SECRET) belum diatur di Environment Variables Vercel.');
   }
+
+  const retryNote = buildRetryChapterInstruction({
+    chapterNumber: params.nextChapterNum,
+    previousWords: params.previousShortWords,
+    minWords: 1000,
+    language: params.isEn ? 'en' : 'id'
+  });
+
+  const combinedNote = [params.slot.curator_feedback || '', retryNote]
+    .filter(Boolean)
+    .join('\n');
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -119,7 +131,8 @@ async function generateChapterViaNovelkuAi(params: {
           language: params.isEn ? 'English' : 'Indonesian',
           chapter_number: params.nextChapterNum,
           target_chapters: params.slot.target_chapters || 20,
-          revision_note: params.slot.curator_feedback || ''
+          min_words: 1000,
+          revision_note: combinedNote
         }
       }),
       signal: controller.signal,
@@ -159,7 +172,7 @@ async function generateChapterViaNovelkuAi(params: {
 
 async function callGeminiText(prompt: string, apiKey: string): Promise<string | null> {
   if (!apiKey) return null;
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-pro'];
   for (const model of models) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
@@ -183,8 +196,34 @@ async function callGeminiText(prompt: string, apiKey: string): Promise<string | 
   return null;
 }
 
+async function resolveGroqModel(apiKey: string): Promise<string> {
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const json = (await res.json().catch(() => null)) as {
+        data?: Array<{ id?: string }>;
+      } | null;
+      const candidate = (json?.data || [])
+        .map((m) => String(m.id || '').trim())
+        .find(
+          (id) =>
+            id &&
+            !/whisper|guard|tts|embed|orpheus|playai|allam|safeguard/i.test(id)
+        );
+      if (candidate) return candidate;
+    }
+  } catch {
+    // gunakan cadangan
+  }
+  return 'llama-3.1-8b-instant';
+}
+
 async function callGroqText(prompt: string, apiKey: string): Promise<string | null> {
   if (!apiKey) return null;
+  const model = await resolveGroqModel(apiKey);
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -192,7 +231,7 @@ async function callGroqText(prompt: string, apiKey: string): Promise<string | nu
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.8,
       max_tokens: 4096
@@ -390,7 +429,10 @@ export async function POST(req: NextRequest) {
       )) as Array<{ project_title?: string; core_conflict?: string; cover_main_object?: string }>;
 
       const avoidList = (existingFps || [])
-        .map((f) => `- Judul: ${f.project_title || ''} | Konflik: ${f.core_conflict || ''} | Objek Cover: ${f.cover_main_object || ''}`)
+        .map(
+          (f) =>
+            `- Judul: ${f.project_title || ''} | Konflik: ${f.core_conflict || ''} | Objek Cover: ${f.cover_main_object || ''}`
+        )
         .join('\n');
 
       const langInstruction = isEn
@@ -503,15 +545,19 @@ export async function POST(req: NextRequest) {
       }
 
       const nextChapterNum = (slot.current_chapter || 0) + 1;
+      const prevShortMatch = slot.last_error?.match(/hanya\s+(\d+)\s+kata/i);
+      const previousShortWords = prevShortMatch ? Number(prevShortMatch[1]) : undefined;
+
       const { chapterTitle, content, provider } = await generateChapterViaNovelkuAi({
         project,
         slot,
         nextChapterNum,
-        isEn
+        isEn,
+        previousShortWords
       });
       const words = countWords(content);
 
-      if (words < 1000 && (slot.chapter_retry_count || 0) < 2) {
+      if (words < 1000 && (slot.chapter_retry_count || 0) < 4) {
         await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slot.id)}`, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -533,7 +579,9 @@ export async function POST(req: NextRequest) {
         })
       });
 
-      const doneAllChapters = nextChapterNum >= (slot.target_chapters || 20);
+      const targetChapters = slot.target_chapters || 20;
+      const doneAllChapters = nextChapterNum >= targetChapters;
+
       await sbFetch(`projects?id=eq.${encodeURIComponent(project.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -568,14 +616,25 @@ export async function POST(req: NextRequest) {
         `chapters?project_id=eq.${encodeURIComponent(slot.project_id || '')}&order=chapter_number.asc`
       )) as ChapterRow[];
 
-      const totalChapters = Array.isArray(chapters) ? chapters.length : 0;
-      const minChapterWords =
-        totalChapters > 0 ? Math.min(...chapters.map((c) => countWords(c.content))) : 0;
+      const list = Array.isArray(chapters) ? chapters : [];
+      const targetChapters = slot.target_chapters || 20;
+
+      const preAudit = auditNovelBeforePackaging({
+        chapters: list.map((c) => ({
+          chapterNumber: c.chapter_number,
+          wordCount: countWords(c.content),
+          hasError: !c.content || c.content.trim().length < 50
+        })),
+        targetChapters,
+        minWordsPerChapter: 1000,
+        qualityScore: slot.quality_score,
+        minQualityScore: 80
+      });
 
       const auditPrompt = [
-        `Evaluate this ${totalChapters}-chapter novel (${langLabel(lang)}).`,
-        `Minimum words per chapter found: ${minChapterWords}. Required: >= 20 chapters and >= 1000 words/chapter and score >= 80.`,
-        `Chapter titles: ${chapters.map((c) => `${c.chapter_number}. ${c.title}`).join(' | ')}`,
+        `Evaluate this ${list.length}-chapter novel (${langLabel(lang)}).`,
+        `Pre-audit word check: ${preAudit.reason}. Required: >= ${targetChapters} chapters and >= 1000 words/chapter and score >= 80.`,
+        `Chapter titles: ${list.map((c) => `${c.chapter_number}. ${c.title}`).join(' | ')}`,
         'Return ONLY valid JSON: {"score":85,"passed":true,"feedback":"short note"}'
       ].join('\n');
 
@@ -583,25 +642,30 @@ export async function POST(req: NextRequest) {
       const parsed = extractJsonObject(text);
       const score = Number(parsed?.score ?? 80);
       const passed =
-        totalChapters >= (slot.target_chapters || 20) &&
-        minChapterWords >= 1000 &&
+        preAudit.passed &&
         score >= 80 &&
         Boolean(parsed?.passed ?? true);
 
-      const feedback = String(parsed?.feedback || '').trim();
+      const feedback = String(parsed?.feedback || preAudit.reason).trim();
 
       if (passed) {
         await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slot.id)}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            stage: 'cover_generation',
+            stage: 'packaging_zip',
             quality_score: score,
-            curator_feedback: feedback || 'Lolos audit kurator',
+            curator_feedback: feedback || 'Lolos audit sebelum Packaging Paket',
             last_error: null,
             updated_at: new Date().toISOString()
           })
         });
-        return NextResponse.json({ ok: true, slot: slot.sequence_no, stage: 'cover_generation', score });
+        return NextResponse.json({
+          ok: true,
+          slot: slot.sequence_no,
+          stage: 'packaging_zip',
+          auditPassed: true,
+          score
+        });
       }
 
       if ((slot.revision_count || 0) < (slot.max_revisions || 2)) {
@@ -613,7 +677,8 @@ export async function POST(req: NextRequest) {
             chapter_retry_count: 0,
             revision_count: (slot.revision_count || 0) + 1,
             quality_score: score,
-            curator_feedback: feedback || `Skor ${score}/100 belum mencapai standar >= 80.`,
+            curator_feedback: feedback || preAudit.reason,
+            last_error: preAudit.passed ? null : preAudit.reason,
             updated_at: new Date().toISOString()
           })
         });
@@ -621,6 +686,7 @@ export async function POST(req: NextRequest) {
           ok: true,
           slot: slot.sequence_no,
           revision: (slot.revision_count || 0) + 1,
+          auditPassed: false,
           score
         });
       }
@@ -652,7 +718,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, slot: slot.sequence_no, stage: 'failed_purged', score });
     }
 
-    if (slot.stage === 'cover_generation') {
+    if (slot.stage === 'packaging_zip' || slot.stage === 'cover_generation') {
       const projects = (await sbFetch(
         `projects?id=eq.${encodeURIComponent(slot.project_id || '')}&limit=1`
       )) as ProjectRow[];
@@ -661,7 +727,8 @@ export async function POST(req: NextRequest) {
       )) as ChapterRow[];
 
       const project = projects[0];
-      const interiorHtml = buildInteriorHtml(project, batch, chapters || []);
+      const chapterList = Array.isArray(chapters) ? chapters : [];
+      const interiorHtml = buildInteriorHtml(project, batch, chapterList);
       const metadataTxt = [
         `Title: ${project.title}`,
         `Author: ${project.pen_name}`,
@@ -669,7 +736,7 @@ export async function POST(req: NextRequest) {
         `Language: ${langLabel(lang)}`,
         `Genre: ${project.genre}`,
         `Trim Size: 6" x 9" (White Paper)`,
-        `Chapters: ${chapters.length}`,
+        `Chapters: ${chapterList.length}`,
         `Quality Score: ${slot.quality_score ?? 85}/100`,
         `Synopsis: ${project.synopsis}`
       ].join('\n');
@@ -708,10 +775,12 @@ export async function POST(req: NextRequest) {
       await sendTelegramMessage(
         batch.telegram_chat_id,
         [
-          `🎉 Novel Lolos Kurator (${nextPassed}/${batch.target_passed}): *${project.title}*`,
+          `🎉 Novel Lolos Auditor & Terkirim (${nextPassed}/${batch.target_passed}): *${project.title}*`,
           `• Penulis: ${project.pen_name} | Penerbit: ${batch.publisher_name}`,
           `• Bahasa: ${langLabel(lang)} | Skor: ${slot.quality_score ?? 85}/100`,
-          folderUrl ? `• Folder Google Drive: ${folderUrl}` : '• Folder Google Drive: Belum dikonfigurasi (DRIVE_UPLOAD_WEBHOOK_URL kosong)',
+          folderUrl
+            ? `• Folder Google Drive: ${folderUrl}`
+            : '• Folder Google Drive: Belum dikonfigurasi (DRIVE_UPLOAD_WEBHOOK_URL kosong)',
           reachedTarget ? '🏁 Target batch tercapai, batch selesai!' : '➡️ Melanjutkan ke novel berikutnya.'
         ].join('\n')
       );
