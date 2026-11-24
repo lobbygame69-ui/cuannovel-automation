@@ -105,6 +105,74 @@ function pickSingleActiveSlot(slots: PipelineSlotState[]): PipelineSlotState | n
   return firstUnfinished || slots[0];
 }
 
+const AiWorkerRobotBanner: React.FC<{
+  isWorking: boolean;
+  stageLabel: string;
+}> = ({ isWorking, stageLabel }) => {
+  const [idleMode, setIdleMode] = useState<'roam' | 'rest'>('roam');
+
+  return (
+    <div className={`cn-robot-bay ${isWorking ? 'is-working' : 'is-idle'}`}>
+      <div className="cn-robot-info">
+        <span className={`cn-robot-badge ${isWorking ? 'work' : 'idle'}`}>
+          {isWorking ? 'ROBOT AI · BEKERJA' : idleMode === 'roam' ? 'ROBOT AI · JALAN-JALAN' : 'ROBOT AI · ISTIRAHAT'}
+        </span>
+        <span className="cn-robot-desc">
+          {isWorking
+            ? `Sedang mengeksekusi tugas worker di tahap: ${stageLabel}`
+            : idleMode === 'roam'
+              ? 'Tidak ada antrean berjalan — Robot AI jalan-jalan santai di ruang kantor.'
+              : 'Tidak ada antrean berjalan — Robot AI duduk istirahat mengisi baterai.'}
+        </span>
+      </div>
+
+      {!isWorking && (
+        <button
+          type="button"
+          onClick={() => setIdleMode((prev) => (prev === 'roam' ? 'rest' : 'roam'))}
+          className="cn-btn cn-btn-sm"
+        >
+          {idleMode === 'roam' ? 'Mode Istirahat' : 'Mode Jalan-Jalan'}
+        </button>
+      )}
+
+      <div className="cn-robot-track">
+        <div
+          className={`cn-robot-actor ${
+            isWorking ? 'act-work' : idleMode === 'roam' ? 'act-roam' : 'act-rest'
+          }`}
+        >
+          <svg width="64" height="54" viewBox="0 0 64 54" aria-hidden="true">
+            {/* Antena Robot */}
+            <line x1="32" y1="5" x2="32" y2="12" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" />
+            <circle
+              cx="32"
+              cy="4.5"
+              r="3.2"
+              fill={isWorking ? '#10b981' : '#38bdf8'}
+              className="rb-ant"
+            />
+            {/* Kepala */}
+            <rect x="18" y="12" width="28" height="17" rx="5" fill="#1e293b" stroke="#0f172a" strokeWidth="1.5" />
+            {/* Mata */}
+            <circle cx="26.5" cy="20.5" r="2.6" fill={isWorking ? '#34d399' : '#7dd3fc'} className="rb-eye" />
+            <circle cx="37.5" cy="20.5" r="2.6" fill={isWorking ? '#34d399' : '#7dd3fc'} className="rb-eye" />
+            {/* Badan */}
+            <rect x="21" y="30" width="22" height="14" rx="4" fill="#0284c7" />
+            <rect x="26" y="34" width="12" height="5" rx="1.5" fill="#e0f2fe" opacity="0.85" />
+            {/* Lengan */}
+            <line x1="20" y1="33" x2="13" y2="39" stroke="#334155" strokeWidth="2.8" strokeLinecap="round" className="rb-arm-l" />
+            <line x1="44" y1="33" x2="51" y2="39" stroke="#334155" strokeWidth="2.8" strokeLinecap="round" className="rb-arm-r" />
+            {/* Kaki */}
+            <line x1="26" y1="44" x2="26" y2="51" stroke="#0f172a" strokeWidth="3" strokeLinecap="round" className="rb-leg-l" />
+            <line x1="38" y1="44" x2="38" y2="51" stroke="#0f172a" strokeWidth="3" strokeLinecap="round" className="rb-leg-r" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SingleStationSvg: React.FC<{
   stationIndex: number;
   active: boolean;
@@ -250,6 +318,11 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
   const unfinishedFiles = slots.filter((s) => !isSlotFinished(s));
   const visibleFiles = fileTab === 'finished' ? finishedFiles : unfinishedFiles;
 
+  const isWorking = Boolean(busy || autoRun || activeSlot?.isRunning);
+  const activeStageIdx = activeSlot
+    ? getStageIndex(activeSlot.stage, activeSlot.chaptersDone, Math.max(1, activeSlot.totalChapters || 20))
+    : 0;
+
   const handleCopyBatchId = () => {
     if (!batchId || batchId === '-') return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -278,7 +351,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           gap: 12px;
           padding-bottom: 14px;
           border-bottom: 1px solid #e2e8f0;
-          margin-bottom: 16px;
+          margin-bottom: 14px;
         }
         .cn-title {
           font-size: 20px;
@@ -314,6 +387,10 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           display: inline-flex;
           align-items: center;
           gap: 6px;
+        }
+        .cn-btn-sm {
+          padding: 5px 10px;
+          font-size: 11.5px;
         }
         .cn-btn:hover:not(:disabled) {
           background: #f1f5f9;
@@ -354,6 +431,104 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         }
         .cn-btn-danger:hover:not(:disabled) {
           background: #fecaca;
+        }
+
+        .cn-robot-bay {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 10px 14px;
+          margin-bottom: 14px;
+        }
+        .cn-robot-bay.is-working {
+          border-color: #34d399;
+          background: #ecfdf5;
+        }
+        .cn-robot-info {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .cn-robot-badge {
+          font-size: 11px;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 999px;
+        }
+        .cn-robot-badge.work {
+          background: #059669;
+          color: #ffffff;
+        }
+        .cn-robot-badge.idle {
+          background: #e0f2fe;
+          color: #0369a1;
+        }
+        .cn-robot-desc {
+          font-size: 12px;
+          color: #334155;
+        }
+        .cn-robot-track {
+          position: relative;
+          height: 56px;
+          border-radius: 8px;
+          background: repeating-linear-gradient(
+            90deg,
+            #f8fafc 0px,
+            #f8fafc 48px,
+            #f1f5f9 48px,
+            #f1f5f9 96px
+          );
+          border-bottom: 2px solid #cbd5e1;
+          overflow: hidden;
+        }
+        .cn-robot-actor {
+          position: absolute;
+          bottom: 0;
+          left: 16px;
+        }
+
+        @keyframes robotWorkBounce {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes robotRoamWalk {
+          0% { transform: translateX(0px) scaleX(1); }
+          45% { transform: translateX(260px) scaleX(1); }
+          50% { transform: translateX(260px) scaleX(-1); }
+          95% { transform: translateX(0px) scaleX(-1); }
+          100% { transform: translateX(0px) scaleX(1); }
+        }
+        @keyframes robotLegSwing {
+          0%, 100% { transform: rotate(-16deg); transform-origin: 26px 44px; }
+          50% { transform: rotate(16deg); transform-origin: 26px 44px; }
+        }
+        @keyframes robotArmWork {
+          0%, 100% { transform: rotate(-12deg); transform-origin: 20px 33px; }
+          50% { transform: rotate(14deg); transform-origin: 20px 33px; }
+        }
+        @keyframes robotRestBreath {
+          0%, 100% { transform: translateY(2px) scaleY(0.96); }
+          50% { transform: translateY(0px) scaleY(1); }
+        }
+
+        .act-work {
+          animation: robotWorkBounce 0.55s ease-in-out infinite;
+        }
+        .act-work .rb-arm-l,
+        .act-work .rb-arm-r {
+          animation: robotArmWork 0.35s ease-in-out infinite;
+        }
+        .act-roam {
+          animation: robotRoamWalk 6.5s linear infinite;
+        }
+        .act-roam .rb-leg-l,
+        .act-roam .rb-leg-r {
+          animation: robotLegSwing 0.45s ease-in-out infinite;
+        }
+        .act-rest {
+          animation: robotRestBreath 2.2s ease-in-out infinite;
         }
 
         .cn-stations-grid {
@@ -622,11 +797,15 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         </div>
       </div>
 
+      <AiWorkerRobotBanner
+        isWorking={isWorking}
+        stageLabel={PIPELINE_STAGES[activeStageIdx]?.shortTitle || 'Riset Proyek'}
+      />
+
       {activeSlot && (() => {
         const total = Math.max(1, activeSlot.totalChapters || 20);
         const pct = Math.min(100, Math.round((activeSlot.chaptersDone / total) * 100));
         const isErr = Boolean(activeSlot.error);
-        const activeStageIdx = getStageIndex(activeSlot.stage, activeSlot.chaptersDone, total);
         const canAnimate = Boolean(activeSlot.isRunning || autoRun);
 
         return (
