@@ -325,6 +325,12 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           background: #eff6ff;
           opacity: 1;
         }
+        .cn-station-box.is-current.is-stopped {
+          border-color: #94a3b8;
+          box-shadow: none;
+          background: #f1f5f9;
+          opacity: 0.92;
+        }
         .cn-station-box.is-current.is-err {
           border-color: #ef4444;
           box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
@@ -340,6 +346,9 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           font-size: 10px;
           font-weight: 700;
           margin-top: 2px;
+          color: #475569;
+        }
+        .cn-station-box.is-current.is-stopped .cn-station-state {
           color: #475569;
         }
 
@@ -484,6 +493,10 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         .st-svg.is-live .st-anim-audit { animation: animAudit 1.1s ease-in-out infinite; }
         .st-svg.is-live .st-anim-kemas { animation: animKemas 1.2s ease-in-out infinite; }
         .st-svg.is-live .st-anim-drive { animation: animDrive 1.1s ease-in-out infinite; }
+
+        .st-svg.is-rest * {
+          animation: none !important;
+        }
       `}</style>
 
       <div className="cn-top">
@@ -517,6 +530,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
         const pct = Math.min(100, Math.round((activeSlot.chaptersDone / total) * 100));
         const isErr = Boolean(activeSlot.error);
         const activeStageIdx = getStageIndex(activeSlot.stage, activeSlot.chaptersDone, total);
+        const canAnimate = Boolean(activeSlot.isRunning || autoRun);
 
         return (
           <>
@@ -525,8 +539,10 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
               {PIPELINE_STAGES.map((st, idx) => {
                 const isDone = idx < activeStageIdx;
                 const isCurrent = idx === activeStageIdx;
+                const isStoppedHere = isCurrent && !canAnimate && !isErr;
+
                 const boxCls = isCurrent
-                  ? `cn-station-box is-current ${isErr ? 'is-err' : ''}`
+                  ? `cn-station-box is-current ${isErr ? 'is-err' : isStoppedHere ? 'is-stopped' : ''}`
                   : isDone
                     ? 'cn-station-box is-done'
                     : 'cn-station-box';
@@ -534,7 +550,9 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                 const stateLabel = isCurrent
                   ? isErr
                     ? 'MENGULANG'
-                    : 'SEDANG JALAN'
+                    : canAnimate
+                      ? 'SEDANG JALAN'
+                      : 'DIHENTIKAN'
                   : isDone
                     ? 'SELESAI'
                     : 'MENUNGGU';
@@ -543,7 +561,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
                   <div key={st.key} className={boxCls}>
                     <SingleStationSvg
                       stationIndex={idx}
-                      active={isCurrent && Boolean(activeSlot.isRunning || autoRun || !isErr)}
+                      active={isCurrent && canAnimate}
                       isError={isErr}
                     />
                     <div className="cn-station-label">{st.label}</div>
@@ -629,7 +647,7 @@ export const OfficePipelineBoard: React.FC<OfficePipelineBoardProps> = ({
           </div>
         ) : (
           visibleFiles.map((item) => (
-            <div key={item.slot} className="cn-file-item">
+            <div key={item.id || item.slot} className="cn-file-item">
               <div>
                 <div className="cn-file-title">
                   Slot #{item.slot} — {item.title || item.driveFileName || `Novel_Slot_${item.slot}`}
