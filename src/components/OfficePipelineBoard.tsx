@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 
 export interface PipelineSlotState {
+  id?: string;
   slot: number;
   projectId?: string | null;
   title?: string;
