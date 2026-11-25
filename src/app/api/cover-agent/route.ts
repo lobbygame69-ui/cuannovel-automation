@@ -4,7 +4,7 @@ import { getEnv } from '@/lib/cuannovel';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-export interface CoverAgentInput {
+interface CoverAgentInput {
   title: string;
   genre?: string;
   synopsis: string;
@@ -12,7 +12,7 @@ export interface CoverAgentInput {
   publisher?: string;
 }
 
-export interface CoverAgentOutput {
+interface CoverAgentOutput {
   ok: boolean;
   agent: 'cuannovel-cover-designer';
   title: string;
@@ -201,7 +201,7 @@ async function generateArtworkDataUri(promptText: string): Promise<string | null
   return null;
 }
 
-export async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgentOutput> {
+async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgentOutput> {
   const title = String(input.title || 'Untitled Novel').trim();
   const genre = String(input.genre || 'FICTION').trim();
   const synopsis = String(input.synopsis || '').trim();
