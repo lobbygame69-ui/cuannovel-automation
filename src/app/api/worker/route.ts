@@ -34,6 +34,13 @@ interface ChapterRow {
   content: string;
 }
 
+interface CoverArtPlan {
+  frontPrompt: string;
+  backPrompt: string;
+  accentHex: string;
+  panelBgHex: string;
+}
+
 function countWords(text: string): number {
   const cleaned = String(text || '')
     .replace(/[#*_`>-]+/g, ' ')
@@ -620,10 +627,67 @@ function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[
   return lines;
 }
 
+async function planCoverArtWithAi(project: ProjectRow): Promise<CoverArtPlan> {
+  const g = (project.genre || '').toLowerCase();
+  const shortSynopsis = String(project.synopsis || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+
+  let defaultMood = 'cinematic dramatic lighting, rich atmospheric depth, commercial book cover illustration';
+  let defaultAccent = '#fbbf24';
+  let defaultPanelBg = '#091326';
+
+  if (g.includes('romance') || g.includes('romansa')) {
+    defaultMood = 'romantic golden hour and twilight atmosphere, emotional rim lighting, soft depth, bestseller romance cover art';
+    defaultAccent = '#f9a8d4';
+    defaultPanelBg = '#1a0f1e';
+  } else if (g.includes('thriller') || g.includes('horror') || g.includes('horor')) {
+    defaultMood = 'high-contrast noir suspense lighting, moody shadows, tension-filled composition, modern thriller cover art';
+    defaultAccent = '#f87171';
+    defaultPanelBg = '#111318';
+  }
+
+  const strictCleanRule =
+    'Strictly NO text, NO letters, NO numbers, NO watermarks, NO logos, NO AI generator names, NO signatures, NO borders.';
+
+  const fallbackPlan: CoverArtPlan = {
+    frontPrompt: `Bestseller novel front cover illustration for "${project.title}" (${project.genre}). Story premise: ${shortSynopsis}. ${defaultMood}. Clean uncluttered upper area for title and lower area for author name. ${strictCleanRule}`,
+    backPrompt: `Matching atmospheric back cover background illustration for "${project.title}" (${project.genre}). Secondary environment and different camera angle from the front cover, evoking ${shortSynopsis}. Softer contrast for readable blurb. ${strictCleanRule}`,
+    accentHex: defaultAccent,
+    panelBgHex: defaultPanelBg
+  };
+
+  try {
+    const prompt = [
+      'You are an Amazon KDP Book Cover Art Director.',
+      `Title: ${project.title}`,
+      `Genre: ${project.genre}`,
+      `Synopsis: ${project.synopsis.slice(0, 360)}`,
+      'Create a frontPrompt and a matching backPrompt (different angle/scene from front so they match in mood & color palette without duplicating the front image).',
+      'Both prompts MUST forbid any text, letters, logos, watermarks, or signatures.',
+      'Return ONLY valid JSON: {"frontPrompt":"...","backPrompt":"...","accentHex":"#fbbf24","panelBgHex":"#091326"}'
+    ].join('\n');
+
+    const { text } = await generateWithFailover(prompt);
+    const parsed = extractJsonObject(text);
+    if (parsed?.frontPrompt && parsed?.backPrompt) {
+      return {
+        frontPrompt: `${String(parsed.frontPrompt).trim()} ${strictCleanRule}`,
+        backPrompt: `${String(parsed.backPrompt).trim()} ${strictCleanRule}`,
+        accentHex: String(parsed.accentHex || fallbackPlan.accentHex).trim(),
+        panelBgHex: String(parsed.panelBgHex || fallbackPlan.panelBgHex).trim()
+      };
+    }
+  } catch {
+    // gunakan fallbackPlan jika kuota LLM sedang penuh
+  }
+
+  return fallbackPlan;
+}
+
 async function fetchCoverIllustrationDataUri(
   promptText: string,
   width: number,
-  height: number
+  height: number,
+  seed: number
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
@@ -634,7 +698,7 @@ async function fetchCoverIllustrationDataUri(
       const res = await fetch(customEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, width, height }),
+        body: JSON.stringify({ prompt: promptText, width, height, seed }),
         signal: controller.signal,
         cache: 'no-store'
       });
@@ -645,17 +709,13 @@ async function fetchCoverIllustrationDataUri(
           return `data:${ct};base64,${buf.toString('base64')}`;
         }
         const json = (await res.json().catch(() => null)) as { imageBase64?: string; url?: string } | null;
-        if (json?.imageBase64) {
-          return `data:image/png;base64,${json.imageBase64}`;
-        }
-        if (json?.url) {
-          return json.url;
-        }
+        if (json?.imageBase64) return `data:image/png;base64,${json.imageBase64}`;
+        if (json?.url) return json.url;
       }
     }
 
     const encodedPrompt = encodeURIComponent(promptText.slice(0, 480));
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true`;
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     const ct = res.headers.get('content-type') || 'image/jpeg';
@@ -668,66 +728,6 @@ async function fetchCoverIllustrationDataUri(
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-function buildRichFallbackArtSvg(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  idPrefix: string,
-  variant: 'front' | 'back'
-): string {
-  const cx = x + Math.round(w * 0.5);
-  const horizonY = y + Math.round(h * 0.63);
-  const baseY = y + h;
-
-  if (variant === 'front') {
-    const towerTop = horizonY - Math.round(h * 0.25);
-    return `
-      <g>
-        <defs>
-          <linearGradient id="${idPrefix}-fsky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#091326"/>
-            <stop offset="50%" stop-color="#221e46"/>
-            <stop offset="100%" stop-color="#6b3e26"/>
-          </linearGradient>
-          <radialGradient id="${idPrefix}-fglow" cx="50%" cy="50%" r="55%">
-            <stop offset="0%" stop-color="#fde68a" stop-opacity="0.72"/>
-            <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.22"/>
-            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-fsky)"/>
-        <ellipse cx="${cx}" cy="${towerTop + 25}" rx="${Math.round(w * 0.45)}" ry="${Math.round(h * 0.16)}" fill="url(#${idPrefix}-fglow)"/>
-        <polygon points="${x + Math.round(w * 0.08)},${horizonY} ${x + Math.round(w * 0.16)},${horizonY - Math.round(h * 0.14)} ${x + Math.round(w * 0.24)},${horizonY}" fill="#111827" opacity="0.75"/>
-        <polygon points="${x + Math.round(w * 0.75)},${horizonY} ${x + Math.round(w * 0.84)},${horizonY - Math.round(h * 0.16)} ${x + Math.round(w * 0.93)},${horizonY}" fill="#111827" opacity="0.75"/>
-        <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#081424"/>
-        <polygon points="${x},${baseY} ${x},${horizonY - 12} ${cx - Math.round(w * 0.14)},${horizonY + 18} ${cx + Math.round(w * 0.2)},${horizonY + 42} ${x + w},${horizonY + 16} ${x + w},${baseY}" fill="#070d19"/>
-        <polygon points="${cx - 36},${horizonY + 12} ${cx + 36},${horizonY + 12} ${cx + 18},${towerTop + 36} ${cx - 18},${towerTop + 36}" fill="#cbd5e1" opacity="0.88"/>
-        <rect x="${cx - 24}" y="${towerTop + 10}" width="48" height="26" rx="4" fill="#fde047"/>
-        <polygon points="${cx - 30},${towerTop + 10} ${cx},${towerTop - 24} ${cx + 30},${towerTop + 10}" fill="#0f172a"/>
-        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#050a14" opacity="0.42"/>
-      </g>
-    `;
-  }
-
-  return `
-    <g>
-      <defs>
-        <linearGradient id="${idPrefix}-bsky" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#0b1528"/>
-          <stop offset="55%" stop-color="#1e294b"/>
-          <stop offset="100%" stop-color="#4a2c2a"/>
-        </linearGradient>
-      </defs>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-bsky)"/>
-      <circle cx="${x + Math.round(w * 0.25)}" cy="${y + Math.round(h * 0.22)}" r="${Math.round(w * 0.06)}" fill="#fcd34d" opacity="0.45"/>
-      <rect x="${x}" y="${horizonY}" width="${w}" height="${baseY - horizonY}" fill="#071322"/>
-      <path d="M ${x + Math.round(w * 0.16)} ${horizonY + 16} Q ${cx} ${horizonY + 40}, ${x + Math.round(w * 0.78)} ${horizonY + 12} L ${x + Math.round(w * 0.66)} ${horizonY + 44} L ${x + Math.round(w * 0.28)} ${horizonY + 44} Z" fill="#0f172a"/>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#040912" opacity="0.38"/>
-    </g>
-  `;
 }
 
 async function buildKdpCoverSvgs(
@@ -761,30 +761,16 @@ async function buildKdpCoverSvgs(
   const spineX = bleedPx + trimWPx;
   const frontX = spineX + spinePx;
 
-  const noWatermarkRule =
-    'NO text, NO letters, NO watermarks, NO logos, NO AI generator names, NO corner signatures.';
-
-  const frontPrompt = [
-    `Bestseller novel front cover art for "${project.title}", genre ${project.genre}.`,
-    `Premise: ${project.synopsis.slice(0, 240)}.`,
-    'Rich cinematic digital painting, dramatic atmospheric lighting, strong focal composition,',
-    noWatermarkRule
-  ].join(' ');
-
-  const backPrompt = [
-    `Matching atmospheric back cover scene for "${project.title}", genre ${project.genre}.`,
-    `Different angle and secondary setting from the front cover, evoking ${project.synopsis.slice(0, 200)}.`,
-    'Moody lighting, subtle depth, complementary color palette,',
-    noWatermarkRule
-  ].join(' ');
+  const artPlan = await planCoverArtWithAi(project);
+  const baseSeed = Math.floor(Date.now() % 1000000);
 
   const [frontArtUri, backArtUri] = await Promise.all([
-    fetchCoverIllustrationDataUri(frontPrompt, 1024, 1536),
-    fetchCoverIllustrationDataUri(backPrompt, 1024, 1536)
+    fetchCoverIllustrationDataUri(artPlan.frontPrompt, 1024, 1536, baseSeed + 11),
+    fetchCoverIllustrationDataUri(artPlan.backPrompt, 1024, 1536, baseSeed + 79)
   ]);
 
   const titleLines = wrapSvgLines(project.title, 18, 4);
-  const synopsisLines = wrapSvgLines(project.synopsis, 38, 12);
+  const synopsisLines = wrapSvgLines(project.synopsis, 38, 11);
 
   const ebookTitleSvg = titleLines
     .map(
@@ -793,19 +779,20 @@ async function buildKdpCoverSvgs(
     )
     .join('\n');
 
+  // Zoom sedikit (+6% bawah) & gradient bawah agar pojok bawah bebas dari watermark AI generator
   const frontBgLayer = frontArtUri
-    ? `<image href="${escapeHtml(frontArtUri)}" x="0" y="0" width="1600" height="2560" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="0" y="0" width="1600" height="2560" fill="#050a14" opacity="0.34"/>
-       <rect x="0" y="2140" width="1600" height="420" fill="#050a14" opacity="0.72"/>`
-    : buildRichFallbackArtSvg(0, 0, 1600, 2560, 'eb', 'front');
+    ? `<image href="${escapeHtml(frontArtUri)}" x="-40" y="-20" width="1680" height="2720" preserveAspectRatio="xMidYMin slice"/>
+       <rect x="0" y="0" width="1600" height="2560" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.30"/>
+       <rect x="0" y="2120" width="1600" height="440" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.84"/>`
+    : `<rect x="0" y="0" width="1600" height="2560" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
 
   const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
   ${frontBgLayer}
-  <rect x="72" y="72" width="1456" height="2416" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.6"/>
+  <rect x="72" y="72" width="1456" height="2416" fill="none" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="4" opacity="0.65"/>
   <text x="800" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${ebookTitleSvg}
-  <text x="800" y="2300" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="800" y="2310" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
   const barcodeW = Math.round(2.0 * dpi);
@@ -817,15 +804,16 @@ async function buildKdpCoverSvgs(
   const spineCenterY = Math.round(fullH / 2);
 
   const pbFrontArt = frontArtUri
-    ? `<image href="${escapeHtml(frontArtUri)}" x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>
-       <rect x="${frontX - bleedPx}" y="${fullH - 420}" width="${trimWPx + bleedPx * 2}" height="420" fill="#050a14" opacity="0.74"/>`
-    : buildRichFallbackArtSvg(frontX - bleedPx, 0, trimWPx + bleedPx * 2, fullH, 'pbf', 'front');
+    ? `<image href="${escapeHtml(frontArtUri)}" x="${frontX - bleedPx - 40}" y="-20" width="${trimWPx + bleedPx * 2 + 80}" height="${fullH + 180}" preserveAspectRatio="xMidYMin slice"/>
+       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.30"/>
+       <rect x="${frontX - bleedPx}" y="${fullH - 440}" width="${trimWPx + bleedPx * 2}" height="440" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.86"/>`
+    : `<rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
 
   const pbBackArt = backArtUri
-    ? `<image href="${escapeHtml(backArtUri)}" x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" preserveAspectRatio="xMidYMid slice"/>
-       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="#050a14" opacity="0.34"/>`
-    : buildRichFallbackArtSvg(0, 0, trimWPx + bleedPx * 2, fullH, 'pbb', 'back');
+    ? `<image href="${escapeHtml(backArtUri)}" x="-40" y="-20" width="${trimWPx + bleedPx * 2 + 80}" height="${fullH + 180}" preserveAspectRatio="xMidYMin slice"/>
+       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.36"/>
+       <rect x="0" y="${fullH - 420}" width="${trimWPx + bleedPx * 2}" height="420" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.82"/>`
+    : `<rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
 
   const titleSvgFront = titleLines
     .map(
@@ -846,12 +834,12 @@ async function buildKdpCoverSvgs(
   ${pbBackArt}
   ${pbFrontArt}
 
-  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="#091326"/>
-  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
-  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="#fbbf24" stroke-width="2" opacity="0.35"/>
+  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>
+  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="2" opacity="0.4"/>
+  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="2" opacity="0.4"/>
 
-  <rect x="${backX + 115}" y="${bleedPx + 200}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.48)}" rx="22" fill="#060d19" fill-opacity="0.86" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="3"/>
-  <text x="${backX + 170}" y="${bleedPx + 305}" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="#fbbf24">${escapeHtml(project.title)}</text>
+  <rect x="${backX + 115}" y="${bleedPx + 190}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.47)}" rx="22" fill="${escapeHtml(artPlan.panelBgHex)}" fill-opacity="0.86" stroke="${escapeHtml(artPlan.accentHex)}" stroke-opacity="0.5" stroke-width="3"/>
+  <text x="${backX + 170}" y="${bleedPx + 300}" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.title)}</text>
   ${synopsisSvgBack}
 
   <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="10" fill="#ffffff"/>
@@ -865,10 +853,10 @@ async function buildKdpCoverSvgs(
       : ''
   }
 
-  <rect x="${frontX + 105}" y="${bleedPx + 105}" width="${trimWPx - 210}" height="${trimH * dpi - 210}" fill="none" stroke="#fbbf24" stroke-width="4" opacity="0.6"/>
+  <rect x="${frontX + 105}" y="${bleedPx + 105}" width="${trimWPx - 210}" height="${trimH * dpi - 210}" fill="none" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="4" opacity="0.65"/>
   <text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 270}" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
   ${titleSvgFront}
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 240}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="#fbbf24">${escapeHtml(project.pen_name)}</text>
+  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 240}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.pen_name)}</text>
 </svg>`;
 
   return {
@@ -879,102 +867,18 @@ async function buildKdpCoverSvgs(
   };
 }
 
-export async function POST(req: NextRequest) {
+function isAuthorized(req: NextRequest): boolean {
+  const cronSecret = getEnv('CRON_SECRET');
+  if (!cronSecret) return true;
+  const auth = req.headers.get('authorization') || '';
+  const qSecret = req.nextUrl.searchParams.get('secret') || '';
+  return auth === `Bearer ${cronSecret}` || qSecret === cronSecret;
+}
+
+async function runNextQueueStep() {
   let activeSlotId: string | null = null;
 
   try {
-    const cronSecret = getEnv('CRON_SECRET');
-    if (cronSecret) {
-      const auth = req.headers.get('authorization') || '';
-      const qSecret = req.nextUrl.searchParams.get('secret') || '';
-      if (auth !== `Bearer ${cronSecret}` && qSecret !== cronSecret) {
-        return NextResponse.json({ ok: false, error: 'Unauthorized worker trigger' }, { status: 401 });
-      }
-    }
-
-    let bodyData: Record<string, unknown> = {};
-    try {
-      bodyData = (await req.json()) as Record<string, unknown>;
-    } catch {
-      bodyData = {};
-    }
-
-    if (bodyData.action === 'delete_slot') {
-      const slotNo = Number(bodyData.slot);
-      const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
-      const projectId = typeof bodyData.projectId === 'string' ? bodyData.projectId.trim() : '';
-
-      let resolvedProjectId = projectId;
-      if (!resolvedProjectId && slotId) {
-        const rows = (await sbFetch(
-          `cuannovel_queue?id=eq.${encodeURIComponent(slotId)}&limit=1`
-        )) as Array<{ project_id?: string | null }>;
-        resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
-      } else if (!resolvedProjectId && Number.isFinite(slotNo) && slotNo > 0) {
-        const rows = (await sbFetch(
-          `cuannovel_queue?sequence_no=eq.${slotNo}&order=id.desc&limit=1`
-        )) as Array<{ project_id?: string | null }>;
-        resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
-      }
-
-      if (resolvedProjectId) {
-        await purgeProjectCompletely(resolvedProjectId);
-      }
-
-      if (slotId) {
-        await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
-          method: 'DELETE'
-        }).catch(() => null);
-      } else if (Number.isFinite(slotNo) && slotNo > 0) {
-        await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
-          method: 'DELETE'
-        }).catch(() => null);
-      }
-
-      return NextResponse.json({
-        ok: true,
-        action: 'delete_slot',
-        deletedSlot: Number.isFinite(slotNo) ? slotNo : null,
-        deletedProjectId: resolvedProjectId || null
-      });
-    }
-
-    if (bodyData.action === 'set_stage') {
-      const slotNo = Number(bodyData.slot);
-      const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
-      const targetStage =
-        typeof bodyData.stage === 'string' && bodyData.stage.trim()
-          ? bodyData.stage.trim()
-          : 'packaging_zip';
-
-      if (slotId) {
-        await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            stage: targetStage,
-            last_error: null,
-            updated_at: new Date().toISOString()
-          })
-        });
-      } else if (Number.isFinite(slotNo) && slotNo > 0) {
-        await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            stage: targetStage,
-            last_error: null,
-            updated_at: new Date().toISOString()
-          })
-        });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        action: 'set_stage',
-        slot: Number.isFinite(slotNo) ? slotNo : null,
-        stage: targetStage
-      });
-    }
-
     const batches = (await sbFetch(
       'cuannovel_batches?status=eq.running&order=created_at.asc&limit=1'
     )) as CuanNovelBatch[];
@@ -1006,6 +910,7 @@ export async function POST(req: NextRequest) {
 
     activeSlotId = slot.id;
 
+    // 1. RISET & KONSEP NOVEL
     if (slot.stage === 'scout_research' || slot.stage === 'trend_rework') {
       const existingFps = (await sbFetch(
         `cuannovel_fingerprints?user_id=eq.${encodeURIComponent(batch.user_id)}&order=created_at.desc&limit=25`
@@ -1114,6 +1019,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, slot: slot.sequence_no, stage: 'scout_research', title });
     }
 
+    // 2. PRODUKSI BAB NOVELKU AI
     if (slot.stage === 'novelku_production') {
       if (!slot.project_id) {
         throw new Error('Slot novelku_production tidak memiliki project_id.');
@@ -1194,6 +1100,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 3. AUDIT KURATOR
     if (slot.stage === 'curator_audit') {
       const chapters = (await sbFetch(
         `chapters?project_id=eq.${encodeURIComponent(slot.project_id || '')}&order=chapter_number.asc`
@@ -1301,7 +1208,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, slot: slot.sequence_no, stage: 'failed_purged', score });
     }
 
-    if (slot.stage === 'packaging_zip' || slot.stage === 'cover_generation') {
+    // 4. DESAIN COVER AI & PACKAGING KDP KE GOOGLE DRIVE
+    if (slot.stage === 'packaging_zip') {
       const projects = (await sbFetch(
         `projects?id=eq.${encodeURIComponent(slot.project_id || '')}&limit=1`
       )) as ProjectRow[];
@@ -1409,6 +1317,100 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized worker trigger' }, { status: 401 });
+  }
+
+  let bodyData: Record<string, unknown> = {};
+  try {
+    bodyData = (await req.json()) as Record<string, unknown>;
+  } catch {
+    bodyData = {};
+  }
+
+  if (bodyData.action === 'delete_slot') {
+    const slotNo = Number(bodyData.slot);
+    const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
+    const projectId = typeof bodyData.projectId === 'string' ? bodyData.projectId.trim() : '';
+
+    let resolvedProjectId = projectId;
+    if (!resolvedProjectId && slotId) {
+      const rows = (await sbFetch(
+        `cuannovel_queue?id=eq.${encodeURIComponent(slotId)}&limit=1`
+      )) as Array<{ project_id?: string | null }>;
+      resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
+    } else if (!resolvedProjectId && Number.isFinite(slotNo) && slotNo > 0) {
+      const rows = (await sbFetch(
+        `cuannovel_queue?sequence_no=eq.${slotNo}&order=id.desc&limit=1`
+      )) as Array<{ project_id?: string | null }>;
+      resolvedProjectId = String(rows?.[0]?.project_id || '').trim();
+    }
+
+    if (resolvedProjectId) {
+      await purgeProjectCompletely(resolvedProjectId);
+    }
+
+    if (slotId) {
+      await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
+        method: 'DELETE'
+      }).catch(() => null);
+    } else if (Number.isFinite(slotNo) && slotNo > 0) {
+      await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
+        method: 'DELETE'
+      }).catch(() => null);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      action: 'delete_slot',
+      deletedSlot: Number.isFinite(slotNo) ? slotNo : null,
+      deletedProjectId: resolvedProjectId || null
+    });
+  }
+
+  if (bodyData.action === 'set_stage') {
+    const slotNo = Number(bodyData.slot);
+    const slotId = typeof bodyData.slotId === 'string' ? bodyData.slotId.trim() : '';
+    const targetStage =
+      typeof bodyData.stage === 'string' && bodyData.stage.trim()
+        ? bodyData.stage.trim()
+        : 'packaging_zip';
+
+    if (slotId) {
+      await sbFetch(`cuannovel_queue?id=eq.${encodeURIComponent(slotId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          stage: targetStage,
+          last_error: null,
+          updated_at: new Date().toISOString()
+        })
+      });
+    } else if (Number.isFinite(slotNo) && slotNo > 0) {
+      await sbFetch(`cuannovel_queue?sequence_no=eq.${slotNo}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          stage: targetStage,
+          last_error: null,
+          updated_at: new Date().toISOString()
+        })
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      action: 'set_stage',
+      slot: Number.isFinite(slotNo) ? slotNo : null,
+      stage: targetStage
+    });
+  }
+
+  return runNextQueueStep();
+}
+
 export async function GET(req: NextRequest) {
-  return POST(req);
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized cron trigger' }, { status: 401 });
+  }
+  return runNextQueueStep();
 }
