@@ -52,7 +52,7 @@ async function fetchIllustrationDataUri(
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 16000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
     if (customEndpoint) {
@@ -78,20 +78,46 @@ async function fetchIllustrationDataUri(
       }
     }
 
-    const encodedPrompt = encodeURIComponent(promptText.slice(0, 480));
+    const encodedPrompt = encodeURIComponent(promptText.slice(0, 420));
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     const ct = res.headers.get('content-type') || 'image/jpeg';
     if (!ct.includes('image/')) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 1000) return null;
+    if (buf.length < 1500) return null;
     return `data:${ct};base64,${buf.toString('base64')}`;
   } catch {
     return null;
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function buildAtmosphericBackdrop(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  accentHex: string,
+  panelBgHex: string,
+  idPrefix: string
+): string {
+  return `
+    <defs>
+      <linearGradient id="${idPrefix}-bg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${panelBgHex}"/>
+        <stop offset="55%" stop-color="#1e1b38"/>
+        <stop offset="100%" stop-color="#451a03"/>
+      </linearGradient>
+      <radialGradient id="${idPrefix}-ember" cx="50%" cy="52%" r="48%">
+        <stop offset="0%" stop-color="${accentHex}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${accentHex}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${idPrefix}-bg)"/>
+    <circle cx="${x + Math.round(w * 0.5)}" cy="${y + Math.round(h * 0.52)}" r="${Math.round(Math.min(w, h) * 0.42)}" fill="url(#${idPrefix}-ember)"/>
+  `;
 }
 
 export async function GET(req: NextRequest) {
@@ -117,8 +143,8 @@ export async function GET(req: NextRequest) {
 
   const seed = Math.floor(Date.now() % 1000000);
   const [frontArt, backArt] = await Promise.all([
-    fetchIllustrationDataUri(plan.frontPrompt, 1024, 1536, seed + 11),
-    fetchIllustrationDataUri(plan.backPrompt, 1024, 1536, seed + 79)
+    fetchIllustrationDataUri(plan.frontPrompt, 768, 1152, seed + 11),
+    fetchIllustrationDataUri(plan.backPrompt, 768, 1152, seed + 79)
   ]);
 
   const titleLines = wrapSvgLines(title, 18, 4);
@@ -138,14 +164,14 @@ export async function GET(req: NextRequest) {
     )
     .join('\n');
 
-  const ebookSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
+  const ebookSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
+  ${buildAtmosphericBackdrop(0, 0, 1600, 2560, plan.accentHex, plan.panelBgHex, 'eb')}
   ${
     frontArt
       ? `<image href="${escapeHtml(frontArt)}" x="-40" y="-20" width="1680" height="2720" preserveAspectRatio="xMidYMin slice"/>
          <rect x="0" y="0" width="1600" height="2560" fill="${plan.panelBgHex}" opacity="0.28"/>
          <rect x="0" y="2120" width="1600" height="440" fill="${plan.panelBgHex}" opacity="0.86"/>`
-      : `<rect x="0" y="0" width="1600" height="2560" fill="${plan.panelBgHex}"/>`
+      : ''
   }
   <rect x="72" y="72" width="1456" height="2416" fill="none" stroke="${plan.accentHex}" stroke-width="4" opacity="0.65"/>
   <text x="800" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml(genre.toUpperCase())}</text>
@@ -153,20 +179,21 @@ export async function GET(req: NextRequest) {
   <text x="800" y="2310" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="${plan.accentHex}">${escapeHtml(penName)}</text>
 </svg>`;
 
-  const wrapSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="3862" height="2775" viewBox="0 0 3862 2775">
+  const wrapSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="3862" height="2775" viewBox="0 0 3862 2775">
+  ${buildAtmosphericBackdrop(0, 0, 1838, 2775, plan.accentHex, plan.panelBgHex, 'wr-back')}
+  ${buildAtmosphericBackdrop(2024, 0, 1838, 2775, plan.accentHex, plan.panelBgHex, 'wr-front')}
   ${
     backArt
       ? `<image href="${escapeHtml(backArt)}" x="-40" y="-20" width="1910" height="2890" preserveAspectRatio="xMidYMin slice"/>
          <rect x="0" y="0" width="1838" height="2775" fill="${plan.panelBgHex}" opacity="0.35"/>`
-      : `<rect x="0" y="0" width="1838" height="2775" fill="${plan.panelBgHex}"/>`
+      : ''
   }
   ${
     frontArt
       ? `<image href="${escapeHtml(frontArt)}" x="1986" y="-20" width="1910" height="2890" preserveAspectRatio="xMidYMin slice"/>
          <rect x="2024" y="0" width="1838" height="2775" fill="${plan.panelBgHex}" opacity="0.28"/>
          <rect x="2024" y="2335" width="1838" height="440" fill="${plan.panelBgHex}" opacity="0.86"/>`
-      : `<rect x="2024" y="0" width="1838" height="2775" fill="${plan.panelBgHex}"/>`
+      : ''
   }
   <rect x="1838" y="0" width="186" height="2775" fill="${plan.panelBgHex}"/>
   <rect x="115" y="220" width="1600" height="1350" rx="20" fill="#060d19" fill-opacity="0.84" stroke="${plan.accentHex}" stroke-opacity="0.5" stroke-width="3"/>
@@ -200,25 +227,29 @@ export async function GET(req: NextRequest) {
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Test Cover — ${escapeHtml(title)}</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; align-items: start; }
-    .card { background: #1e293b; padding: 16px; border-radius: 12px; }
-    img { width: 100%; height: auto; border-radius: 8px; display: block; background: #091326; }
-    h2 { margin: 0 0 12px; font-size: 16px; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
+    .meta { font-size: 13px; color: #cbd5e1; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; align-items: start; }
+    .card { background: #1e293b; padding: 14px; border-radius: 12px; }
+    .svg-box { width: 100%; border-radius: 8px; overflow: hidden; background: #091326; }
+    .svg-box svg { width: 100%; height: auto; display: block; }
+    h2 { margin: 0 0 10px; font-size: 15px; }
   </style>
 </head>
 <body>
-  <h1>Preview Cover Saja: ${escapeHtml(title)}</h1>
+  <h1>Preview Cover: ${escapeHtml(title)}</h1>
+  <div class="meta">Front AI Art: ${frontArt ? 'Loaded' : 'Fallback'} | Back AI Art: ${backArt ? 'Loaded' : 'Fallback'}</div>
   <div class="grid">
     <div class="card">
       <h2>E-Book Cover</h2>
-      <img src="data:image/svg+xml;utf8,${encodeURIComponent(ebookSvg)}" alt="E-Book Cover" />
+      <div class="svg-box">${ebookSvg}</div>
     </div>
     <div class="card">
       <h2>Paperback Full-Wrap Cover</h2>
-      <img src="data:image/svg+xml;utf8,${encodeURIComponent(wrapSvg)}" alt="Full-Wrap Cover" />
+      <div class="svg-box">${wrapSvg}</div>
     </div>
   </div>
 </body>
