@@ -75,7 +75,7 @@ async function callGeminiCoverDesigner(
         return JSON.parse(match[0]) as Record<string, unknown>;
       }
     } catch {
-      // coba model berikutnya
+      // lanjut model berikutnya
     }
   }
   return null;
@@ -91,8 +91,8 @@ async function designCoverWithAi(params: {
     'Strictly NO text, NO letters, NO words, NO numbers, NO watermarks, NO logos, NO signatures, NO borders.';
 
   const fallback: CoverDesignSpec = {
-    frontArtPrompt: `Detailed commercial book cover illustration for "${params.title}" (${params.genre}). Depicts ${cleanSynopsis.slice(0, 200)}, featuring an ancient stone arch and glowing golden ember light swirls with a lone figure in the lower foreground, rich cinematic lighting, clean upper space for title and lower space for author. ${noTextRule}`,
-    backArtPrompt: `Matching atmospheric book back cover artwork for "${params.title}" (${params.genre}). Depicts a grand ancient archive library filled with warm glowing embers and soft golden-amber light rays, distinct composition from front cover, clean upper-middle area for blurb. ${noTextRule}`,
+    frontArtPrompt: `Detailed fantasy mystery book cover art for "${params.title}" (${params.genre}). Ancient stone arch with glowing golden ember light swirls and a small lone archivist silhouette in lower foreground, rich cinematic lighting, clean upper area for title and lower area for author name. ${noTextRule}`,
+    backArtPrompt: `Atmospheric fantasy book back cover scene for "${params.title}" (${params.genre}). Grand ancient library archive with glowing warm embers and moody lighting, clean upper-middle area for blurb. ${noTextRule}`,
     accentHex: '#e5c17b',
     darkBgHex: '#0b0f17',
     tagline: '“Secrets forged in ember can reshape an entire world.”'
@@ -106,9 +106,9 @@ async function designCoverWithAi(params: {
     `Title: ${params.title}`,
     `Genre: ${params.genre}`,
     `Synopsis: ${cleanSynopsis.slice(0, 350)}`,
-    'Write two highly specific, visually rich illustration prompts tailored directly to this title and synopsis:',
-    '1. frontArtPrompt: vivid focal artwork for the front cover that matches the title & story premise, with clean breathing room for title at top and author at bottom.',
-    '2. backArtPrompt: complementary scene for the back cover (different camera angle/setting from front, matching color mood and story world).',
+    'Write two specific illustration prompts tailored to this title and synopsis:',
+    '1. frontArtPrompt: vivid focal artwork for the front cover with clean breathing room for title at top and author at bottom.',
+    '2. backArtPrompt: complementary scene for the back cover (different angle/setting from front, matching color mood).',
     '3. tagline: a short evocative 1-sentence hook/quote fitting the story.',
     'Both art prompts MUST explicitly forbid any text, letters, logos, or watermarks.',
     'Return ONLY valid JSON: {"frontArtPrompt":"...","backArtPrompt":"...","tagline":"...","accentHex":"#e5c17b","darkBgHex":"#0b0f17"}'
@@ -136,7 +136,7 @@ async function fetchIllustrationDataUri(
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 18000);
+  const timeoutId = setTimeout(() => controller.abort(), 16000);
 
   try {
     if (customEndpoint) {
@@ -162,7 +162,7 @@ async function fetchIllustrationDataUri(
       }
     }
 
-    const encodedPrompt = encodeURIComponent(promptText.slice(0, 420));
+    const encodedPrompt = encodeURIComponent(promptText.slice(0, 400));
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
@@ -176,44 +176,6 @@ async function fetchIllustrationDataUri(
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-function buildClippedBarcode(
-  boxX: number,
-  boxY: number,
-  boxW: number,
-  boxH: number,
-  clipId: string
-): string {
-  const pattern = [
-    2, 1, 3, 1, 1, 2, 3, 1, 2, 1, 1, 3, 2, 2, 1, 3, 1, 1, 2, 1, 3, 1, 2, 2, 1, 3, 1, 2, 1, 1,
-    3, 2, 1, 1, 2, 3, 1, 2, 1, 3, 1, 1, 2, 2, 1, 3, 1, 2, 1, 1, 2, 3, 1, 2, 1, 1, 3, 1, 2, 1
-  ];
-  const innerLeft = boxX + 36;
-  const innerRight = boxX + boxW - 36;
-  let cursor = innerLeft;
-  const bars: string[] = [];
-
-  pattern.forEach((w, idx) => {
-    const pxW = w * 6;
-    if (cursor + pxW <= innerRight && idx % 2 === 0) {
-      bars.push(
-        `<rect x="${cursor}" y="${boxY + 28}" width="${pxW}" height="${boxH - 96}" fill="#111827"/>`
-      );
-    }
-    cursor += pxW + 2;
-  });
-
-  return `
-    <clipPath id="${clipId}">
-      <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="8"/>
-    </clipPath>
-    <g clip-path="url(#${clipId})">
-      <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="#ffffff"/>
-      ${bars.join('\n')}
-      <text x="${boxX + Math.round(boxW / 2)}" y="${boxY + boxH - 24}" text-anchor="middle" font-family="Courier, monospace" font-size="28" font-weight="bold" fill="#111827">9 786585 007853</text>
-    </g>
-  `;
 }
 
 export async function GET(req: NextRequest) {
@@ -230,10 +192,9 @@ export async function GET(req: NextRequest) {
   const design = await designCoverWithAi({ title, genre, synopsis });
   const seed = Math.floor(Date.now() % 1000000);
 
-  const [frontArt, backArt] = await Promise.all([
-    fetchIllustrationDataUri(design.frontArtPrompt, 768, 1152, seed + 19),
-    fetchIllustrationDataUri(design.backArtPrompt, 768, 1152, seed + 89)
-  ]);
+  // Ambil gambar depan dulu agar cover depan selalu diprioritaskan ter-render
+  const frontArt = await fetchIllustrationDataUri(design.frontArtPrompt, 768, 1152, seed + 19);
+  const backArt = await fetchIllustrationDataUri(design.backArtPrompt, 768, 1152, seed + 89);
 
   const titleLines = wrapSvgLines(title, 15, 3);
   const blurbLines = wrapSvgLines(synopsis, 36, 6);
@@ -306,7 +267,6 @@ export async function GET(req: NextRequest) {
       <stop offset="42%" stop-color="#080c14" stop-opacity="0.14"/>
       <stop offset="100%" stop-color="#070a10" stop-opacity="0.78"/>
     </linearGradient>
-    ${buildClippedBarcode(1150, 2235, 540, 330, 'clip-barcode')}
   </defs>
 
   <g clip-path="url(#clip-back)">
@@ -325,6 +285,9 @@ export async function GET(req: NextRequest) {
     <polygon points="340,2245 395,2213 450,2245 450,2309 395,2341 340,2309" fill="none" stroke="${design.accentHex}" stroke-width="5"/>
     <polygon points="362,2258 395,2239 428,2258 428,2296 395,2315 362,2296" fill="none" stroke="#f8fafc" stroke-width="2.5"/>
     <text x="395" y="2415" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="3" font-weight="bold" fill="#f8fafc">${escapeHtml(publisher.toUpperCase())}</text>
+
+    <!-- Kotak kosong tempat barcode KDP (tanpa tulisan maupun garis barcode) -->
+    <rect x="1150" y="2235" width="540" height="330" rx="8" fill="#ffffff"/>
   </g>
 
   <g clip-path="url(#clip-spine)">
