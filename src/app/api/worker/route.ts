@@ -34,13 +34,6 @@ interface ChapterRow {
   content: string;
 }
 
-interface CoverArtPlan {
-  frontPrompt: string;
-  backPrompt: string;
-  accentHex: string;
-  panelBgHex: string;
-}
-
 function countWords(text: string): number {
   const cleaned = String(text || '')
     .replace(/[#*_`>-]+/g, ' ')
@@ -602,269 +595,72 @@ function estimateTotalPages(chapters: ChapterRow[]): number {
   return 5 + contentPages;
 }
 
-function wrapSvgLines(text: string, maxChars: number, maxLines: number): string[] {
-  const words = String(text || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const w of words) {
-    const candidate = current ? `${current} ${w}` : w;
-    if (candidate.length <= maxChars) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = w;
-      if (lines.length >= maxLines) break;
-    }
-  }
-  if (current && lines.length < maxLines) {
-    lines.push(current);
-  }
-  return lines;
+function resolveBaseAppUrl(req?: NextRequest): string {
+  const configured = getEnv('APP_URL');
+  if (configured) return configured.replace(/\/+$/, '');
+  if (req?.nextUrl?.origin) return req.nextUrl.origin.replace(/\/+$/, '');
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+  return 'https://cuannovel-automation.vercel.app';
 }
 
-async function planCoverArtWithAi(project: ProjectRow): Promise<CoverArtPlan> {
-  const g = (project.genre || '').toLowerCase();
-  const shortSynopsis = String(project.synopsis || '').replace(/\s+/g, ' ').trim().slice(0, 240);
-
-  let defaultMood = 'cinematic dramatic lighting, rich atmospheric depth, commercial book cover illustration';
-  let defaultAccent = '#fbbf24';
-  let defaultPanelBg = '#091326';
-
-  if (g.includes('romance') || g.includes('romansa')) {
-    defaultMood = 'romantic golden hour and twilight atmosphere, emotional rim lighting, soft depth, bestseller romance cover art';
-    defaultAccent = '#f9a8d4';
-    defaultPanelBg = '#1a0f1e';
-  } else if (g.includes('thriller') || g.includes('horror') || g.includes('horor')) {
-    defaultMood = 'high-contrast noir suspense lighting, moody shadows, tension-filled composition, modern thriller cover art';
-    defaultAccent = '#f87171';
-    defaultPanelBg = '#111318';
-  }
-
-  const strictCleanRule =
-    'Strictly NO text, NO letters, NO numbers, NO watermarks, NO logos, NO AI generator names, NO signatures, NO borders.';
-
-  const fallbackPlan: CoverArtPlan = {
-    frontPrompt: `Bestseller novel front cover illustration for "${project.title}" (${project.genre}). Story premise: ${shortSynopsis}. ${defaultMood}. Clean uncluttered upper area for title and lower area for author name. ${strictCleanRule}`,
-    backPrompt: `Matching atmospheric back cover background illustration for "${project.title}" (${project.genre}). Secondary environment and different camera angle from the front cover, evoking ${shortSynopsis}. Softer contrast for readable blurb. ${strictCleanRule}`,
-    accentHex: defaultAccent,
-    panelBgHex: defaultPanelBg
-  };
-
-  try {
-    const prompt = [
-      'You are an Amazon KDP Book Cover Art Director.',
-      `Title: ${project.title}`,
-      `Genre: ${project.genre}`,
-      `Synopsis: ${project.synopsis.slice(0, 360)}`,
-      'Create a frontPrompt and a matching backPrompt (different angle/scene from front so they match in mood & color palette without duplicating the front image).',
-      'Both prompts MUST forbid any text, letters, logos, watermarks, or signatures.',
-      'Return ONLY valid JSON: {"frontPrompt":"...","backPrompt":"...","accentHex":"#fbbf24","panelBgHex":"#091326"}'
-    ].join('\n');
-
-    const { text } = await generateWithFailover(prompt);
-    const parsed = extractJsonObject(text);
-    if (parsed?.frontPrompt && parsed?.backPrompt) {
-      return {
-        frontPrompt: `${String(parsed.frontPrompt).trim()} ${strictCleanRule}`,
-        backPrompt: `${String(parsed.backPrompt).trim()} ${strictCleanRule}`,
-        accentHex: String(parsed.accentHex || fallbackPlan.accentHex).trim(),
-        panelBgHex: String(parsed.panelBgHex || fallbackPlan.panelBgHex).trim()
-      };
-    }
-  } catch {
-    // gunakan fallbackPlan jika kuota LLM sedang penuh
-  }
-
-  return fallbackPlan;
-}
-
-async function fetchCoverIllustrationDataUri(
-  promptText: string,
-  width: number,
-  height: number,
-  seed: number
-): Promise<string | null> {
-  const customEndpoint = getEnv('COVER_IMAGE_API_URL');
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 16000);
-
-  try {
-    if (customEndpoint) {
-      const res = await fetch(customEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, width, height, seed }),
-        signal: controller.signal,
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        const ct = res.headers.get('content-type') || 'image/jpeg';
-        if (ct.includes('image/')) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          return `data:${ct};base64,${buf.toString('base64')}`;
-        }
-        const json = (await res.json().catch(() => null)) as { imageBase64?: string; url?: string } | null;
-        if (json?.imageBase64) return `data:image/png;base64,${json.imageBase64}`;
-        if (json?.url) return json.url;
-      }
-    }
-
-    const encodedPrompt = encodeURIComponent(promptText.slice(0, 480));
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
-    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-    if (!res.ok) return null;
-    const ct = res.headers.get('content-type') || 'image/jpeg';
-    if (!ct.includes('image/')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 1000) return null;
-    return `data:${ct};base64,${buf.toString('base64')}`;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function buildKdpCoverSvgs(
-  project: ProjectRow,
-  batch: CuanNovelBatch,
-  chapters: ChapterRow[]
-): Promise<{
+async function callCoverDesignerAgent(params: {
+  baseUrl: string;
+  project: ProjectRow;
+  batch: CuanNovelBatch;
+  chapters: ChapterRow[];
+}): Promise<{
   ebookCoverSvg: string;
   paperbackCoverSvg: string;
   spineWidthInches: number;
   estimatedPages: number;
 }> {
-  const dpi = 300;
-  const trimW = 6;
-  const trimH = 9;
-  const bleed = 0.125;
-
-  const estimatedPages = estimateTotalPages(chapters);
+  const estimatedPages = estimateTotalPages(params.chapters);
   const spineWidthInches = Number(Math.max(0.25, estimatedPages * 0.002252).toFixed(3));
 
-  const fullWIn = Number((bleed + trimW + spineWidthInches + trimW + bleed).toFixed(3));
-  const fullHIn = Number((bleed + trimH + bleed).toFixed(3));
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 50000);
 
-  const fullW = Math.round(fullWIn * dpi);
-  const fullH = Math.round(fullHIn * dpi);
-  const bleedPx = Math.round(bleed * dpi);
-  const trimWPx = Math.round(trimW * dpi);
-  const spinePx = Math.round(spineWidthInches * dpi);
+  try {
+    const res = await fetch(`${params.baseUrl}/api/cover-agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: params.project.title,
+        genre: params.project.genre || 'FICTION',
+        synopsis: params.project.synopsis,
+        author: params.project.pen_name || params.batch.author_name || 'M. F. Julian',
+        publisher: params.batch.publisher_name || 'cuannovelkarya'
+      }),
+      signal: controller.signal,
+      cache: 'no-store'
+    });
 
-  const backX = bleedPx;
-  const spineX = bleedPx + trimWPx;
-  const frontX = spineX + spinePx;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Cover Designer Agent HTTP ${res.status}: ${errText.slice(0, 180)}`);
+    }
 
-  const artPlan = await planCoverArtWithAi(project);
-  const baseSeed = Math.floor(Date.now() % 1000000);
+    const json = (await res.json()) as {
+      ok?: boolean;
+      ebookSvg?: string;
+      wrapSvg?: string;
+      error?: string;
+    };
 
-  const [frontArtUri, backArtUri] = await Promise.all([
-    fetchCoverIllustrationDataUri(artPlan.frontPrompt, 1024, 1536, baseSeed + 11),
-    fetchCoverIllustrationDataUri(artPlan.backPrompt, 1024, 1536, baseSeed + 79)
-  ]);
+    if (!json?.ok || !json.ebookSvg || !json.wrapSvg) {
+      throw new Error(json?.error || 'Cover Designer Agent tidak mengembalikan SVG cover.');
+    }
 
-  const titleLines = wrapSvgLines(project.title, 18, 4);
-  const synopsisLines = wrapSvgLines(project.synopsis, 38, 11);
-
-  const ebookTitleSvg = titleLines
-    .map(
-      (line, i) =>
-        `<text x="800" y="${560 + i * 130}" text-anchor="middle" font-family="Georgia, serif" font-size="110" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
-    )
-    .join('\n');
-
-  // Zoom sedikit (+6% bawah) & gradient bawah agar pojok bawah bebas dari watermark AI generator
-  const frontBgLayer = frontArtUri
-    ? `<image href="${escapeHtml(frontArtUri)}" x="-40" y="-20" width="1680" height="2720" preserveAspectRatio="xMidYMin slice"/>
-       <rect x="0" y="0" width="1600" height="2560" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.30"/>
-       <rect x="0" y="2120" width="1600" height="440" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.84"/>`
-    : `<rect x="0" y="0" width="1600" height="2560" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
-
-  const ebookCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
-  ${frontBgLayer}
-  <rect x="72" y="72" width="1456" height="2416" fill="none" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="4" opacity="0.65"/>
-  <text x="800" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
-  ${ebookTitleSvg}
-  <text x="800" y="2310" text-anchor="middle" font-family="Georgia, serif" font-size="64" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.pen_name)}</text>
-</svg>`;
-
-  const barcodeW = Math.round(2.0 * dpi);
-  const barcodeH = Math.round(1.2 * dpi);
-  const barcodeX = spineX - 135 - barcodeW;
-  const barcodeY = fullH - bleedPx - 135 - barcodeH;
-
-  const spineCenterX = spineX + Math.round(spinePx / 2);
-  const spineCenterY = Math.round(fullH / 2);
-
-  const pbFrontArt = frontArtUri
-    ? `<image href="${escapeHtml(frontArtUri)}" x="${frontX - bleedPx - 40}" y="-20" width="${trimWPx + bleedPx * 2 + 80}" height="${fullH + 180}" preserveAspectRatio="xMidYMin slice"/>
-       <rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.30"/>
-       <rect x="${frontX - bleedPx}" y="${fullH - 440}" width="${trimWPx + bleedPx * 2}" height="440" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.86"/>`
-    : `<rect x="${frontX - bleedPx}" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
-
-  const pbBackArt = backArtUri
-    ? `<image href="${escapeHtml(backArtUri)}" x="-40" y="-20" width="${trimWPx + bleedPx * 2 + 80}" height="${fullH + 180}" preserveAspectRatio="xMidYMin slice"/>
-       <rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.36"/>
-       <rect x="0" y="${fullH - 420}" width="${trimWPx + bleedPx * 2}" height="420" fill="${escapeHtml(artPlan.panelBgHex)}" opacity="0.82"/>`
-    : `<rect x="0" y="0" width="${trimWPx + bleedPx * 2}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>`;
-
-  const titleSvgFront = titleLines
-    .map(
-      (line, i) =>
-        `<text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 540 + i * 134}" text-anchor="middle" font-family="Georgia, serif" font-size="112" font-weight="bold" fill="#ffffff">${escapeHtml(line)}</text>`
-    )
-    .join('\n');
-
-  const synopsisSvgBack = synopsisLines
-    .map(
-      (line, i) =>
-        `<text x="${backX + 170}" y="${bleedPx + 390 + i * 64}" font-family="Georgia, serif" font-size="42" fill="#f8fafc">${escapeHtml(line)}</text>`
-    )
-    .join('\n');
-
-  const paperbackCoverSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${fullW}" height="${fullH}" viewBox="0 0 ${fullW} ${fullH}">
-  ${pbBackArt}
-  ${pbFrontArt}
-
-  <rect x="${spineX}" y="0" width="${spinePx}" height="${fullH}" fill="${escapeHtml(artPlan.panelBgHex)}"/>
-  <line x1="${spineX}" y1="0" x2="${spineX}" y2="${fullH}" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="2" opacity="0.4"/>
-  <line x1="${frontX}" y1="0" x2="${frontX}" y2="${fullH}" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="2" opacity="0.4"/>
-
-  <rect x="${backX + 115}" y="${bleedPx + 190}" width="${trimWPx - 230}" height="${Math.round(trimH * dpi * 0.47)}" rx="22" fill="${escapeHtml(artPlan.panelBgHex)}" fill-opacity="0.86" stroke="${escapeHtml(artPlan.accentHex)}" stroke-opacity="0.5" stroke-width="3"/>
-  <text x="${backX + 170}" y="${bleedPx + 300}" font-family="Georgia, serif" font-size="54" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.title)}</text>
-  ${synopsisSvgBack}
-
-  <rect x="${barcodeX}" y="${barcodeY}" width="${barcodeW}" height="${barcodeH}" rx="10" fill="#ffffff"/>
-  <text x="${backX + 170}" y="${fullH - bleedPx - 210}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#f8fafc">${escapeHtml(batch.publisher_name)}</text>
-
-  ${
-    spineWidthInches >= 0.35
-      ? `<g transform="translate(${spineCenterX}, ${spineCenterY}) rotate(90)">
-          <text x="0" y="13" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="bold" fill="#f8fafc">${escapeHtml(project.title)} — ${escapeHtml(project.pen_name)}</text>
-        </g>`
-      : ''
+    return {
+      ebookCoverSvg: json.ebookSvg,
+      paperbackCoverSvg: json.wrapSvg,
+      spineWidthInches,
+      estimatedPages
+    };
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  <rect x="${frontX + 105}" y="${bleedPx + 105}" width="${trimWPx - 210}" height="${trimH * dpi - 210}" fill="none" stroke="${escapeHtml(artPlan.accentHex)}" stroke-width="4" opacity="0.65"/>
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${bleedPx + 270}" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="6" fill="#fde68a">${escapeHtml((project.genre || 'NOVEL').toUpperCase())}</text>
-  ${titleSvgFront}
-  <text x="${frontX + Math.round(trimWPx / 2)}" y="${fullH - bleedPx - 240}" text-anchor="middle" font-family="Georgia, serif" font-size="66" font-weight="bold" fill="${escapeHtml(artPlan.accentHex)}">${escapeHtml(project.pen_name)}</text>
-</svg>`;
-
-  return {
-    ebookCoverSvg,
-    paperbackCoverSvg,
-    spineWidthInches,
-    estimatedPages
-  };
 }
 
 function isAuthorized(req: NextRequest): boolean {
@@ -875,7 +671,7 @@ function isAuthorized(req: NextRequest): boolean {
   return auth === `Bearer ${cronSecret}` || qSecret === cronSecret;
 }
 
-async function runNextQueueStep() {
+async function runNextQueueStep(req?: NextRequest) {
   let activeSlotId: string | null = null;
 
   try {
@@ -1208,7 +1004,7 @@ async function runNextQueueStep() {
       return NextResponse.json({ ok: true, slot: slot.sequence_no, stage: 'failed_purged', score });
     }
 
-    // 4. DESAIN COVER AI & PACKAGING KDP KE GOOGLE DRIVE
+    // 4. DESAIN COVER AI (VIA /api/cover-agent) & PACKAGING KDP KE GOOGLE DRIVE
     if (slot.stage === 'packaging_zip') {
       const projects = (await sbFetch(
         `projects?id=eq.${encodeURIComponent(slot.project_id || '')}&limit=1`
@@ -1224,12 +1020,19 @@ async function runNextQueueStep() {
 
       const chapterList = Array.isArray(chapters) ? chapters : [];
       const interiorHtml = buildInteriorHtml(project, batch, chapterList);
+      const baseUrl = resolveBaseAppUrl(req);
+
       const {
         ebookCoverSvg,
         paperbackCoverSvg,
         spineWidthInches,
         estimatedPages
-      } = await buildKdpCoverSvgs(project, batch, chapterList);
+      } = await callCoverDesignerAgent({
+        baseUrl,
+        project,
+        batch,
+        chapters: chapterList
+      });
 
       const metadataTxt = [
         `Title: ${project.title}`,
@@ -1405,12 +1208,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return runNextQueueStep();
+  return runNextQueueStep(req);
 }
 
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized cron trigger' }, { status: 401 });
   }
-  return runNextQueueStep();
+  return runNextQueueStep(req);
 }
