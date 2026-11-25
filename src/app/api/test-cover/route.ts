@@ -75,7 +75,7 @@ async function callGeminiCoverDesigner(
         return JSON.parse(match[0]) as Record<string, unknown>;
       }
     } catch {
-      // coba model berikutnya
+      // lanjut model berikutnya
     }
   }
   return null;
@@ -88,11 +88,11 @@ async function designCoverWithAi(params: {
 }): Promise<CoverDesignSpec> {
   const cleanSynopsis = String(params.synopsis || '').replace(/\s+/g, ' ').trim();
   const noTextRule =
-    'Strictly NO text, NO letters, NO words, NO numbers, NO watermarks, NO logos, NO signatures, NO borders.';
+    'No text, no letters, no words, no watermarks, no logos, no borders.';
 
   const fallback: CoverDesignSpec = {
-    frontArtPrompt: `Detailed fantasy mystery book cover art for "${params.title}" (${params.genre}). Ancient stone arch with glowing golden ember light swirls and a small lone archivist silhouette in lower foreground, rich cinematic lighting, clean upper area for title and lower area for author name. ${noTextRule}`,
-    backArtPrompt: `Atmospheric fantasy book back cover scene for "${params.title}" (${params.genre}). Grand ancient library archive with glowing warm embers and moody lighting, clean upper-middle area for blurb. ${noTextRule}`,
+    frontArtPrompt: `Fantasy mystery book cover art for "${params.title}" (${params.genre}), ancient stone archway with glowing golden ember magic swirls and a lone archivist silhouette in lower foreground, dramatic cinematic lighting, clean dark upper space for title. ${noTextRule}`,
+    backArtPrompt: `Grand ancient circular library archive hall with multi-level wooden bookshelves, warm golden lantern light and floating glowing embers, moody cinematic atmosphere, fantasy book back cover art. ${noTextRule}`,
     accentHex: '#e5c17b',
     darkBgHex: '#0b0f17',
     tagline: '“Secrets forged in ember can reshape an entire world.”'
@@ -108,7 +108,7 @@ async function designCoverWithAi(params: {
     `Synopsis: ${cleanSynopsis.slice(0, 350)}`,
     'Write two specific illustration prompts tailored to this title and synopsis:',
     '1. frontArtPrompt: vivid focal artwork for the front cover with clean breathing room for title at top and author at bottom.',
-    '2. backArtPrompt: complementary scene for the back cover (different angle/setting from front, matching color mood).',
+    '2. backArtPrompt: rich interior/environment scene for the back cover (such as an ancient library, archive, or atmospheric setting matching the story world, different camera angle from front).',
     '3. tagline: a short evocative 1-sentence hook/quote fitting the story.',
     'Both art prompts MUST explicitly forbid any text, letters, logos, or watermarks.',
     'Return ONLY valid JSON: {"frontArtPrompt":"...","backArtPrompt":"...","tagline":"...","accentHex":"#e5c17b","darkBgHex":"#0b0f17"}'
@@ -128,7 +128,7 @@ async function designCoverWithAi(params: {
   };
 }
 
-async function fetchIllustrationDataUri(
+async function fetchSingleAttempt(
   promptText: string,
   width: number,
   height: number,
@@ -136,7 +136,7 @@ async function fetchIllustrationDataUri(
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 18000);
+  const timeoutId = setTimeout(() => controller.abort(), 16000);
 
   try {
     if (customEndpoint) {
@@ -162,14 +162,14 @@ async function fetchIllustrationDataUri(
       }
     }
 
-    const encodedPrompt = encodeURIComponent(promptText.slice(0, 400));
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
+    const encodedPrompt = encodeURIComponent(promptText.slice(0, 360));
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     const ct = res.headers.get('content-type') || 'image/jpeg';
     if (!ct.includes('image/')) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 1500) return null;
+    if (buf.length < 2000) return null;
     return `data:${ct};base64,${buf.toString('base64')}`;
   } catch {
     return null;
@@ -178,42 +178,61 @@ async function fetchIllustrationDataUri(
   }
 }
 
-function buildBackArchiveFallbackSvg(accentHex: string): string {
-  // Ilustrasi ruang arsip & cahaya bara hangat (0..1838 x 0..2775) jika backArt eksternal gagal
+async function fetchIllustrationWithRetry(
+  promptText: string,
+  width: number,
+  height: number,
+  seed: number
+): Promise<string | null> {
+  const first = await fetchSingleAttempt(promptText, width, height, seed);
+  if (first) return first;
+  return fetchSingleAttempt(promptText, width, height, seed + 313);
+}
+
+function buildBackLibraryFallbackGroup(accentHex: string): string {
+  // Grup ilustrasi arsip perpustakaan bertingkat dengan cahaya lentera hangat (dapat dirender langsung di SVG)
+  const bookSpinesLeft: string[] = [];
+  const bookSpinesRight: string[] = [];
+  for (let row = 0; row < 5; row++) {
+    const yBase = 1120 + row * 210;
+    for (let col = 0; col < 11; col++) {
+      const h = 135 + ((row * 17 + col * 23) % 45);
+      const opacity = (0.35 + ((row + col) % 4) * 0.14).toFixed(2);
+      bookSpinesLeft.push(
+        `<rect x="${160 + col * 38}" y="${yBase - h}" width="30" height="${h}" rx="3" fill="#3b2314" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="1.5" opacity="${opacity}"/>`
+      );
+      bookSpinesRight.push(
+        `<rect x="${1260 + col * 38}" y="${yBase - h}" width="30" height="${h}" rx="3" fill="#3b2314" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="1.5" opacity="${opacity}"/>`
+      );
+    }
+  }
+
   return `
-    <defs>
-      <radialGradient id="back-ember-glow" cx="50%" cy="62%" r="55%">
-        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.42"/>
-        <stop offset="55%" stop-color="#92400e" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="#090d14" stop-opacity="0"/>
-      </radialGradient>
-      <linearGradient id="back-hall-grad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#111827"/>
-        <stop offset="55%" stop-color="#1f1b24"/>
-        <stop offset="100%" stop-color="#2c1608"/>
-      </linearGradient>
-    </defs>
-    <rect x="0" y="0" width="1838" height="2775" fill="url(#back-hall-grad)"/>
-    <ellipse cx="919" cy="1680" rx="760" ry="620" fill="url(#back-ember-glow)"/>
-    <!-- Pilar & rak arsip -->
-    <rect x="120" y="180" width="110" height="2420" fill="#0b0f17" opacity="0.75"/>
-    <rect x="310" y="340" width="170" height="1920" fill="#181210" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="2"/>
-    <rect x="1358" y="340" width="170" height="1920" fill="#181210" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="2"/>
-    <rect x="1608" y="180" width="110" height="2420" fill="#0b0f17" opacity="0.75"/>
-    <!-- Garis rak horizontal -->
-    <line x1="310" y1="720" x2="480" y2="720" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <line x1="310" y1="1120" x2="480" y2="1120" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <line x1="310" y1="1520" x2="480" y2="1520" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <line x1="1358" y1="720" x2="1528" y2="720" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <line x1="1358" y1="1120" x2="1528" y2="1120" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <line x1="1358" y1="1520" x2="1528" y2="1520" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
-    <!-- Partikel bara lembut -->
-    <circle cx="640" cy="1420" r="6" fill="#fbbf24" opacity="0.75"/>
-    <circle cx="820" cy="1290" r="4" fill="#fde68a" opacity="0.8"/>
-    <circle cx="1090" cy="1480" r="7" fill="#f59e0b" opacity="0.65"/>
-    <circle cx="960" cy="1740" r="5" fill="#fbbf24" opacity="0.7"/>
-    <circle cx="520" cy="1820" r="4" fill="#fde68a" opacity="0.6"/>
-    <circle cx="1280" cy="1920" r="6" fill="#f59e0b" opacity="0.7"/>
+    <g id="back-archive-scene">
+      <rect x="0" y="0" width="1838" height="2775" fill="url(#back-hall-grad)"/>
+      <!-- Lengkungan kubah arsip utama -->
+      <path d="M 140 2775 L 140 1240 Q 919 640 1698 1240 L 1698 2775 Z" fill="#141118" stroke="${accentHex}" stroke-opacity="0.32" stroke-width="4"/>
+      <path d="M 320 2775 L 320 1360 Q 919 880 1518 1360 L 1518 2775 Z" fill="#1b1518" stroke="${accentHex}" stroke-opacity="0.24" stroke-width="3"/>
+      <!-- Cahaya hangat pusat ruang arsip -->
+      <ellipse cx="919" cy="1660" rx="680" ry="640" fill="url(#back-ember-glow)"/>
+      <!-- Balkon & pagar besi arsip lantai 2 -->
+      <rect x="140" y="1380" width="1558" height="36" fill="#0d0f14" stroke="${accentHex}" stroke-opacity="0.4" stroke-width="2"/>
+      <rect x="140" y="1820" width="1558" height="36" fill="#0d0f14" stroke="${accentHex}" stroke-opacity="0.4" stroke-width="2"/>
+      <!-- Rak-rak buku bertingkat kiri & kanan -->
+      ${bookSpinesLeft.join('\n')}
+      ${bookSpinesRight.join('\n')}
+      <!-- Meja baca & lentera cahaya di tengah -->
+      <ellipse cx="919" cy="1860" rx="260" ry="38" fill="#0b0d12" stroke="${accentHex}" stroke-opacity="0.35" stroke-width="2"/>
+      <circle cx="919" cy="1760" r="34" fill="#fde68a" opacity="0.85"/>
+      <circle cx="919" cy="1760" r="130" fill="#f59e0b" opacity="0.24"/>
+      <!-- Partikel bara beterbangan -->
+      <circle cx="620" cy="1480" r="6" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="790" cy="1320" r="4" fill="#fde68a" opacity="0.85"/>
+      <circle cx="1120" cy="1460" r="7" fill="#f59e0b" opacity="0.72"/>
+      <circle cx="980" cy="1620" r="5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="540" cy="1960" r="5" fill="#fde68a" opacity="0.65"/>
+      <circle cx="1290" cy="1940" r="6" fill="#f59e0b" opacity="0.7"/>
+    </g>
   `;
 }
 
@@ -231,9 +250,9 @@ export async function GET(req: NextRequest) {
   const design = await designCoverWithAi({ title, genre, synopsis });
   const seed = Math.floor(Date.now() % 1000000);
 
-  // Ambil gambar depan dulu lalu gambar belakang
-  const frontArt = await fetchIllustrationDataUri(design.frontArtPrompt, 768, 1152, seed + 19);
-  const backArt = await fetchIllustrationDataUri(design.backArtPrompt, 768, 1152, seed + 89);
+  // Ambil gambar depan dan belakang secara berurutan dengan retry otomatis
+  const frontArt = await fetchIllustrationWithRetry(design.frontArtPrompt, 768, 1152, seed + 19);
+  const backArt = await fetchIllustrationWithRetry(design.backArtPrompt, 768, 1152, seed + 89);
 
   const titleLines = wrapSvgLines(title, 15, 3);
   const blurbLines = wrapSvgLines(synopsis, 36, 6);
@@ -296,17 +315,26 @@ export async function GET(req: NextRequest) {
     <clipPath id="clip-front">
       <rect x="2024" y="0" width="1838" height="2775"/>
     </clipPath>
+    <radialGradient id="back-ember-glow" cx="50%" cy="62%" r="55%">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.48"/>
+      <stop offset="55%" stop-color="#92400e" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#090d14" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="back-hall-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="55%" stop-color="#231918"/>
+      <stop offset="100%" stop-color="#351908"/>
+    </linearGradient>
     <linearGradient id="back-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.45"/>
-      <stop offset="50%" stop-color="#080c14" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.62"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.42"/>
+      <stop offset="50%" stop-color="#080c14" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.58"/>
     </linearGradient>
     <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#080c14" stop-opacity="0.68"/>
       <stop offset="42%" stop-color="#080c14" stop-opacity="0.12"/>
       <stop offset="100%" stop-color="#070a10" stop-opacity="0.74"/>
     </linearGradient>
-    ${buildBackArchiveFallbackSvg(design.accentHex)}
   </defs>
 
   <g clip-path="url(#clip-back)">
@@ -314,11 +342,11 @@ export async function GET(req: NextRequest) {
     ${
       backArt
         ? `<image href="${escapeHtml(backArt)}" x="-30" y="-20" width="1898" height="2880" preserveAspectRatio="xMidYMid slice"/>`
-        : `<use href="#back-ember-glow"/>`
+        : buildBackLibraryFallbackGroup(design.accentHex)
     }
     <rect x="0" y="0" width="1838" height="2775" fill="url(#back-scrim)"/>
 
-    <rect x="235" y="270" width="1368" height="710" fill="#090d14" fill-opacity="0.68" stroke="${design.accentHex}" stroke-opacity="0.7" stroke-width="2.5"/>
+    <rect x="235" y="270" width="1368" height="710" fill="#090d14" fill-opacity="0.72" stroke="${design.accentHex}" stroke-opacity="0.75" stroke-width="2.5"/>
     ${blurbSvg}
     <text x="919" y="880" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="38" fill="#e2e8f0">${escapeHtml(design.tagline)}</text>
 
@@ -372,7 +400,7 @@ export async function GET(req: NextRequest) {
 </head>
 <body>
   <h1>Preview Cover: ${escapeHtml(title)}</h1>
-  <div class="meta">Front AI Art: ${frontArt ? 'Loaded' : 'Fallback'} | Back AI Art: ${backArt ? 'Loaded' : 'Fallback'}</div>
+  <div class="meta">Front AI Art: ${frontArt ? 'Loaded' : 'Fallback'} | Back AI Art: ${backArt ? 'Loaded' : 'Archive Fallback'}</div>
   <div class="grid">
     <div class="card">
       <h2>E-Book Cover</h2>
