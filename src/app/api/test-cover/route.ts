@@ -75,7 +75,7 @@ async function callGeminiCoverDesigner(
         return JSON.parse(match[0]) as Record<string, unknown>;
       }
     } catch {
-      // lanjut model berikutnya
+      // coba model berikutnya
     }
   }
   return null;
@@ -136,7 +136,7 @@ async function fetchIllustrationDataUri(
 ): Promise<string | null> {
   const customEndpoint = getEnv('COVER_IMAGE_API_URL');
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 16000);
+  const timeoutId = setTimeout(() => controller.abort(), 18000);
 
   try {
     if (customEndpoint) {
@@ -178,6 +178,45 @@ async function fetchIllustrationDataUri(
   }
 }
 
+function buildBackArchiveFallbackSvg(accentHex: string): string {
+  // Ilustrasi ruang arsip & cahaya bara hangat (0..1838 x 0..2775) jika backArt eksternal gagal
+  return `
+    <defs>
+      <radialGradient id="back-ember-glow" cx="50%" cy="62%" r="55%">
+        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.42"/>
+        <stop offset="55%" stop-color="#92400e" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="#090d14" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="back-hall-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#111827"/>
+        <stop offset="55%" stop-color="#1f1b24"/>
+        <stop offset="100%" stop-color="#2c1608"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1838" height="2775" fill="url(#back-hall-grad)"/>
+    <ellipse cx="919" cy="1680" rx="760" ry="620" fill="url(#back-ember-glow)"/>
+    <!-- Pilar & rak arsip -->
+    <rect x="120" y="180" width="110" height="2420" fill="#0b0f17" opacity="0.75"/>
+    <rect x="310" y="340" width="170" height="1920" fill="#181210" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="2"/>
+    <rect x="1358" y="340" width="170" height="1920" fill="#181210" stroke="${accentHex}" stroke-opacity="0.22" stroke-width="2"/>
+    <rect x="1608" y="180" width="110" height="2420" fill="#0b0f17" opacity="0.75"/>
+    <!-- Garis rak horizontal -->
+    <line x1="310" y1="720" x2="480" y2="720" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <line x1="310" y1="1120" x2="480" y2="1120" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <line x1="310" y1="1520" x2="480" y2="1520" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <line x1="1358" y1="720" x2="1528" y2="720" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <line x1="1358" y1="1120" x2="1528" y2="1120" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <line x1="1358" y1="1520" x2="1528" y2="1520" stroke="${accentHex}" stroke-opacity="0.25" stroke-width="2"/>
+    <!-- Partikel bara lembut -->
+    <circle cx="640" cy="1420" r="6" fill="#fbbf24" opacity="0.75"/>
+    <circle cx="820" cy="1290" r="4" fill="#fde68a" opacity="0.8"/>
+    <circle cx="1090" cy="1480" r="7" fill="#f59e0b" opacity="0.65"/>
+    <circle cx="960" cy="1740" r="5" fill="#fbbf24" opacity="0.7"/>
+    <circle cx="520" cy="1820" r="4" fill="#fde68a" opacity="0.6"/>
+    <circle cx="1280" cy="1920" r="6" fill="#f59e0b" opacity="0.7"/>
+  `;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const title = (searchParams.get('title') || 'The Ember Archive').trim();
@@ -192,7 +231,7 @@ export async function GET(req: NextRequest) {
   const design = await designCoverWithAi({ title, genre, synopsis });
   const seed = Math.floor(Date.now() % 1000000);
 
-  // Ambil gambar depan dulu agar cover depan selalu diprioritaskan ter-render
+  // Ambil gambar depan dulu lalu gambar belakang
   const frontArt = await fetchIllustrationDataUri(design.frontArtPrompt, 768, 1152, seed + 19);
   const backArt = await fetchIllustrationDataUri(design.backArtPrompt, 768, 1152, seed + 89);
 
@@ -226,9 +265,9 @@ export async function GET(req: NextRequest) {
       <rect x="0" y="0" width="1600" height="2560"/>
     </clipPath>
     <linearGradient id="eb-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.72"/>
-      <stop offset="42%" stop-color="#080c14" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.78"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.68"/>
+      <stop offset="42%" stop-color="#080c14" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.74"/>
     </linearGradient>
   </defs>
   <g clip-path="url(#eb-clip)">
@@ -258,15 +297,16 @@ export async function GET(req: NextRequest) {
       <rect x="2024" y="0" width="1838" height="2775"/>
     </clipPath>
     <linearGradient id="back-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.62"/>
-      <stop offset="50%" stop-color="#080c14" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.80"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.45"/>
+      <stop offset="50%" stop-color="#080c14" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.62"/>
     </linearGradient>
     <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.72"/>
-      <stop offset="42%" stop-color="#080c14" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.78"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.68"/>
+      <stop offset="42%" stop-color="#080c14" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.74"/>
     </linearGradient>
+    ${buildBackArchiveFallbackSvg(design.accentHex)}
   </defs>
 
   <g clip-path="url(#clip-back)">
@@ -274,11 +314,11 @@ export async function GET(req: NextRequest) {
     ${
       backArt
         ? `<image href="${escapeHtml(backArt)}" x="-30" y="-20" width="1898" height="2880" preserveAspectRatio="xMidYMid slice"/>`
-        : ''
+        : `<use href="#back-ember-glow"/>`
     }
     <rect x="0" y="0" width="1838" height="2775" fill="url(#back-scrim)"/>
 
-    <rect x="235" y="270" width="1368" height="710" fill="#090d14" fill-opacity="0.64" stroke="${design.accentHex}" stroke-opacity="0.65" stroke-width="2.5"/>
+    <rect x="235" y="270" width="1368" height="710" fill="#090d14" fill-opacity="0.68" stroke="${design.accentHex}" stroke-opacity="0.7" stroke-width="2.5"/>
     ${blurbSvg}
     <text x="919" y="880" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="38" fill="#e2e8f0">${escapeHtml(design.tagline)}</text>
 
