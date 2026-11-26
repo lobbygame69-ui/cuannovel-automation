@@ -67,12 +67,22 @@ function getGeminiKeys(): string[] {
   return Array.from(new Set(keys));
 }
 
+function hashSeed(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h) >>> 0;
+}
+
 async function planVisualDirection(input: CoverAgentInput): Promise<{
   frontPrompt: string;
   backPrompt: string;
   tagline: string;
   accentHex: string;
   darkBgHex: string;
+  secondaryHex: string;
 }> {
   const cleanSynopsis = String(input.synopsis || '').replace(/\s+/g, ' ').trim();
   const genre = String(input.genre || 'FICTION').trim();
@@ -80,11 +90,12 @@ async function planVisualDirection(input: CoverAgentInput): Promise<{
     'Strictly NO text, NO letters, NO words, NO numbers, NO watermarks, NO logos, NO signatures, NO borders.';
 
   const fallback = {
-    frontPrompt: `Detailed commercial novel front cover illustration for "${input.title}" (${genre}). Depicts ${cleanSynopsis.slice(0, 220)}, dramatic lighting, strong central focal art, clean dark upper space for title and lower space for author name. ${noTextRule}`,
-    backPrompt: `Matching atmospheric novel back cover scene for "${input.title}" (${genre}). Complementary setting from the same story world with different angle and rich mood, clean upper-middle space for blurb. ${noTextRule}`,
+    frontPrompt: `Rich commercial novel front cover art for "${input.title}" (${genre}). Depicts ${cleanSynopsis.slice(0, 220)}, dramatic lighting, strong central focal scene, clean dark upper space for title and lower space for author name. ${noTextRule}`,
+    backPrompt: `Matching atmospheric novel back cover art for "${input.title}" (${genre}). Complementary scene from the same story world with different camera angle and glowing highlights. ${noTextRule}`,
     tagline: '“Every hidden truth leaves a mark that cannot be undone.”',
     accentHex: '#e5c17b',
-    darkBgHex: '#0b0f17'
+    darkBgHex: '#0b0f17',
+    secondaryHex: '#2dd4bf'
   };
 
   const keys = getGeminiKeys();
@@ -111,7 +122,7 @@ async function planVisualDirection(input: CoverAgentInput): Promise<{
                         `Genre: ${genre}`,
                         `Description: ${cleanSynopsis.slice(0, 400)}`,
                         'Return ONLY valid JSON:',
-                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","accentHex":"#e5c17b","darkBgHex":"#0b0f17"}'
+                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","accentHex":"#e5c17b","darkBgHex":"#0b0f17","secondaryHex":"#2dd4bf"}'
                       ].join('\n')
                     }
                   ]
@@ -137,12 +148,13 @@ async function planVisualDirection(input: CoverAgentInput): Promise<{
               backPrompt: `${String(parsed.backPrompt).trim()} ${noTextRule}`,
               tagline: String(parsed.tagline || fallback.tagline).trim(),
               accentHex: String(parsed.accentHex || fallback.accentHex).trim(),
-              darkBgHex: String(parsed.darkBgHex || fallback.darkBgHex).trim()
+              darkBgHex: String(parsed.darkBgHex || fallback.darkBgHex).trim(),
+              secondaryHex: String(parsed.secondaryHex || fallback.secondaryHex).trim()
             };
           }
         }
       } catch {
-        // lanjut ke model/key berikutnya
+        // lanjut
       }
     }
   }
@@ -201,6 +213,56 @@ async function generateArtworkDataUri(promptText: string): Promise<string | null
   return null;
 }
 
+function buildRichArtLayer(params: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  seedKey: string;
+  accentHex: string;
+  secondaryHex: string;
+  darkBgHex: string;
+  mode: 'front' | 'back';
+}): string {
+  const s = hashSeed(params.seedKey);
+  const cx = params.x + Math.round(params.width * (params.mode === 'front' ? 0.5 : 0.48));
+  const cy = params.y + Math.round(params.height * (params.mode === 'front' ? 0.58 : 0.64));
+  const rMain = Math.round(Math.min(params.width, params.height) * 0.34);
+
+  const rays: string[] = [];
+  const countRays = 12;
+  for (let i = 0; i < countRays; i++) {
+    const angle = ((i * 360) / countRays + (s % 25)) * (Math.PI / 180);
+    const x2 = cx + Math.round(Math.cos(angle) * rMain * 1.45);
+    const y2 = cy + Math.round(Math.sin(angle) * rMain * 1.45);
+    rays.push(
+      `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${i % 2 === 0 ? params.accentHex : params.secondaryHex}" stroke-width="3" opacity="0.22"/>`
+    );
+  }
+
+  const orbs: string[] = [];
+  for (let i = 0; i < 18; i++) {
+    const ox = params.x + Math.round((((s + i * 977) % 1000) / 1000) * params.width);
+    const oy = params.y + Math.round(params.height * 0.25 + (((s + i * 613) % 1000) / 1000) * params.height * 0.7);
+    const radius = 5 + ((s + i * 29) % 18);
+    const op = (0.28 + (((s + i * 41) % 55) / 100)).toFixed(2);
+    const fill = i % 3 === 0 ? params.secondaryHex : params.accentHex;
+    orbs.push(`<circle cx="${ox}" cy="${oy}" r="${radius}" fill="${fill}" opacity="${op}"/>`);
+  }
+
+  const horizonY = params.y + Math.round(params.height * 0.74);
+
+  return `
+    <rect x="${params.x}" y="${params.y}" width="${params.width}" height="${params.height}" fill="${params.darkBgHex}"/>
+    <circle cx="${cx}" cy="${cy}" r="${Math.round(rMain * 1.35)}" fill="${params.accentHex}" opacity="0.14"/>
+    <circle cx="${cx}" cy="${cy}" r="${Math.round(rMain * 0.82)}" fill="${params.secondaryHex}" opacity="0.16"/>
+    ${rays.join('\n')}
+    <path d="M ${params.x} ${horizonY + 160} Q ${cx - Math.round(params.width * 0.22)} ${horizonY - 110} ${cx} ${horizonY + 40} T ${params.x + params.width} ${horizonY + 80} L ${params.x + params.width} ${params.y + params.height} L ${params.x} ${params.y + params.height} Z" fill="#0d1322" stroke="${params.accentHex}" stroke-opacity="0.35" stroke-width="3"/>
+    <path d="M ${cx - Math.round(rMain * 0.55)} ${params.y + params.height} L ${cx - Math.round(rMain * 0.35)} ${cy - Math.round(rMain * 0.45)} Q ${cx} ${cy - Math.round(rMain * 0.9)} ${cx + Math.round(rMain * 0.35)} ${cy - Math.round(rMain * 0.45)} L ${cx + Math.round(rMain * 0.55)} ${params.y + params.height} Z" fill="#131b2e" stroke="${params.accentHex}" stroke-opacity="0.55" stroke-width="4"/>
+    ${orbs.join('\n')}
+  `;
+}
+
 async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgentOutput> {
   const title = String(input.title || 'Untitled Novel').trim();
   const genre = String(input.genre || 'FICTION').trim();
@@ -213,7 +275,7 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
   const backArt = await generateArtworkDataUri(spec.backPrompt);
 
   const titleLines = wrapSvgLines(title, 15, 3);
-  const blurbLines = wrapSvgLines(synopsis, 36, 6);
+  const blurbLines = wrapSvgLines(synopsis, 36, 8);
 
   const ebookTitleSvg = titleLines
     .map(
@@ -232,28 +294,65 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
   const blurbSvg = blurbLines
     .map(
       (line, idx) =>
-        `<text x="919" y="${395 + idx * 64}" text-anchor="middle" font-family="Georgia, serif" font-size="42" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="919" y="${350 + idx * 58}" text-anchor="middle" font-family="Georgia, serif" font-size="40" fill="#f8fafc">${escapeHtml(line)}</text>`
     )
     .join('\n');
+
+  const ebookArtLayer = frontArt
+    ? `<image href="${escapeHtml(frontArt)}" x="-20" y="-20" width="1640" height="2680" preserveAspectRatio="xMidYMid slice"/>`
+    : buildRichArtLayer({
+        x: 0,
+        y: 0,
+        width: 1600,
+        height: 2560,
+        seedKey: `${title}|${genre}|front|ebook`,
+        accentHex: spec.accentHex,
+        secondaryHex: spec.secondaryHex,
+        darkBgHex: spec.darkBgHex,
+        mode: 'front'
+      });
+
+  const wrapBackArtLayer = backArt
+    ? `<image href="${escapeHtml(backArt)}" x="-20" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
+    : buildRichArtLayer({
+        x: 0,
+        y: 0,
+        width: 1838,
+        height: 2775,
+        seedKey: `${title}|${genre}|back|wrap`,
+        accentHex: spec.accentHex,
+        secondaryHex: spec.secondaryHex,
+        darkBgHex: spec.darkBgHex,
+        mode: 'back'
+      });
+
+  const wrapFrontArtLayer = frontArt
+    ? `<image href="${escapeHtml(frontArt)}" x="2004" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
+    : buildRichArtLayer({
+        x: 2024,
+        y: 0,
+        width: 1838,
+        height: 2775,
+        seedKey: `${title}|${genre}|front|wrap`,
+        accentHex: spec.accentHex,
+        secondaryHex: spec.secondaryHex,
+        darkBgHex: spec.darkBgHex,
+        mode: 'front'
+      });
 
   const ebookSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
   <defs>
     <clipPath id="eb-clip"><rect x="0" y="0" width="1600" height="2560"/></clipPath>
     <linearGradient id="eb-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.68"/>
-      <stop offset="44%" stop-color="#080c14" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.76"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.62"/>
+      <stop offset="45%" stop-color="#080c14" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.72"/>
     </linearGradient>
   </defs>
   <g clip-path="url(#eb-clip)">
-    <rect x="0" y="0" width="1600" height="2560" fill="${spec.darkBgHex}"/>
-    ${
-      frontArt
-        ? `<image href="${escapeHtml(frontArt)}" x="-20" y="-20" width="1640" height="2680" preserveAspectRatio="xMidYMid slice"/>`
-        : ''
-    }
+    ${ebookArtLayer}
     <rect x="0" y="0" width="1600" height="2560" fill="url(#eb-scrim)"/>
-    <rect x="68" y="68" width="1464" height="2424" fill="none" stroke="${spec.accentHex}" stroke-width="3" opacity="0.78"/>
+    <rect x="68" y="68" width="1464" height="2424" fill="none" stroke="${escapeHtml(spec.accentHex)}" stroke-width="3" opacity="0.78"/>
     <text x="800" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
     ${ebookTitleSvg}
     <text x="800" y="2335" text-anchor="middle" font-family="Georgia, serif" font-size="76" letter-spacing="5" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
@@ -266,29 +365,24 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     <clipPath id="clip-spine"><rect x="1838" y="0" width="186" height="2775"/></clipPath>
     <clipPath id="clip-front"><rect x="2024" y="0" width="1838" height="2775"/></clipPath>
     <linearGradient id="back-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.52"/>
-      <stop offset="50%" stop-color="#080c14" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.68"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.46"/>
+      <stop offset="50%" stop-color="#080c14" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.62"/>
     </linearGradient>
     <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#080c14" stop-opacity="0.68"/>
-      <stop offset="44%" stop-color="#080c14" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070a10" stop-opacity="0.76"/>
+      <stop offset="0%" stop-color="#080c14" stop-opacity="0.62"/>
+      <stop offset="45%" stop-color="#080c14" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#070a10" stop-opacity="0.72"/>
     </linearGradient>
   </defs>
 
   <g clip-path="url(#clip-back)">
-    <rect x="0" y="0" width="1838" height="2775" fill="${spec.darkBgHex}"/>
-    ${
-      backArt
-        ? `<image href="${escapeHtml(backArt)}" x="-20" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
-        : ''
-    }
+    ${wrapBackArtLayer}
     <rect x="0" y="0" width="1838" height="2775" fill="url(#back-scrim)"/>
-    <rect x="235" y="270" width="1368" height="710" fill="#090d14" fill-opacity="0.70" stroke="${spec.accentHex}" stroke-opacity="0.75" stroke-width="2.5"/>
+    <rect x="235" y="250" width="1368" height="750" fill="#090d14" fill-opacity="0.72" stroke="${escapeHtml(spec.accentHex)}" stroke-opacity="0.75" stroke-width="2.5"/>
     ${blurbSvg}
-    <text x="919" y="880" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="38" fill="#e2e8f0">${escapeHtml(spec.tagline)}</text>
-    <polygon points="340,2245 395,2213 450,2245 450,2309 395,2341 340,2309" fill="none" stroke="${spec.accentHex}" stroke-width="5"/>
+    <text x="919" y="925" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="36" fill="#e2e8f0">${escapeHtml(spec.tagline)}</text>
+    <polygon points="340,2245 395,2213 450,2245 450,2309 395,2341 340,2309" fill="none" stroke="${escapeHtml(spec.accentHex)}" stroke-width="5"/>
     <polygon points="362,2258 395,2239 428,2258 428,2296 395,2315 362,2296" fill="none" stroke="#f8fafc" stroke-width="2.5"/>
     <text x="395" y="2415" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="3" font-weight="bold" fill="#f8fafc">${escapeHtml(publisher)}</text>
     <rect x="1150" y="2235" width="540" height="330" rx="8" fill="#ffffff"/>
@@ -298,20 +392,15 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     <rect x="1838" y="0" width="186" height="2775" fill="#12161f"/>
     <g transform="translate(1931, 1388) rotate(90)">
       <text x="-430" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="38" letter-spacing="4" fill="#f8fafc">${escapeHtml(title.toUpperCase())}</text>
-      <circle cx="0" cy="0" r="14" fill="${spec.accentHex}" opacity="0.85"/>
+      <circle cx="0" cy="0" r="14" fill="${escapeHtml(spec.accentHex)}" opacity="0.85"/>
       <text x="430" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="38" letter-spacing="4" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
     </g>
   </g>
 
   <g clip-path="url(#clip-front)">
-    <rect x="2024" y="0" width="1838" height="2775" fill="${spec.darkBgHex}"/>
-    ${
-      frontArt
-        ? `<image href="${escapeHtml(frontArt)}" x="2004" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
-        : ''
-    }
+    ${wrapFrontArtLayer}
     <rect x="2024" y="0" width="1838" height="2775" fill="url(#front-scrim)"/>
-    <rect x="2125" y="135" width="1636" height="2505" fill="none" stroke="${spec.accentHex}" stroke-width="3" opacity="0.78"/>
+    <rect x="2125" y="135" width="1636" height="2505" fill="none" stroke="${escapeHtml(spec.accentHex)}" stroke-width="3" opacity="0.78"/>
     <text x="2943" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
     ${wrapFrontTitleSvg}
     <text x="2943" y="2535" text-anchor="middle" font-family="Georgia, serif" font-size="82" letter-spacing="5" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
@@ -390,7 +479,7 @@ export async function GET(req: NextRequest) {
 </head>
 <body>
   <h1>Cover Designer Agent: ${escapeHtml(result.title)}</h1>
-  <div class="meta">Front Generated: ${result.frontGenerated ? 'Yes' : 'No'} | Back Generated: ${result.backGenerated ? 'Yes' : 'No'}</div>
+  <div class="meta">Front AI Image: ${result.frontGenerated ? 'AI Generated' : 'Layered Art'} | Back AI Image: ${result.backGenerated ? 'AI Generated' : 'Layered Art'}</div>
   <div class="grid">
     <div class="card">
       <h2>E-Book Cover</h2>
