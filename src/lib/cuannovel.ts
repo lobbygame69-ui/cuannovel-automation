@@ -47,6 +47,34 @@ export interface NovelAuditResult {
   retryChapterNumber?: number;
 }
 
+export interface InteriorChapterInput {
+  number?: number;
+  title?: string;
+  content?: string;
+}
+
+export interface BuildInteriorHtmlParams {
+  title: string;
+  subtitle?: string;
+  author?: string;
+  publisher?: string;
+  language?: string;
+  chapters: InteriorChapterInput[];
+}
+
+export interface DrivePackagePayload {
+  title: string;
+  author?: string;
+  publisher?: string;
+  language?: string;
+  ebookCoverSvg?: string;
+  paperbackCoverSvg?: string;
+  ebookPngBase64?: string;
+  wrapPngBase64?: string;
+  interiorHtml?: string;
+  metadataTxt?: string;
+}
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -73,6 +101,247 @@ export function normalizeLang(raw?: string | null): 'id' | 'en' {
 
 export function langLabel(lang?: string | null): string {
   return normalizeLang(lang) === 'en' ? 'Inggris (EN)' : 'Indonesia (ID)';
+}
+
+function escapeHtml(value: string): string {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatChapterParagraphs(rawContent: string): string {
+  return String(rawContent || '')
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`)
+    .join('\n');
+}
+
+/**
+ * Membangun HTML interior siap unggah ke Amazon KDP eBook & Paperback
+ * dengan Table of Contents (TOC) interaktif agar tidak memicu "Missing Table of Contents".
+ */
+export function buildKdpReadyInteriorHtml(params: BuildInteriorHtmlParams): string {
+  const title = String(params.title || 'Untitled Novel').trim();
+  const subtitle = String(params.subtitle || '').trim();
+  const author = String(params.author || getEnv('DEFAULT_AUTHOR_NAME') || 'M. F. JULIAN').trim();
+  const publisher = String(
+    params.publisher || getEnv('DEFAULT_PUBLISHER_NAME') || 'cuannovelkarya'
+  ).trim();
+  const lang = normalizeLang(params.language || getEnv('DEFAULT_LANGUAGE'));
+  const year = new Date().getFullYear();
+
+  const tocHeading = lang === 'id' ? 'Daftar Isi' : 'Table of Contents';
+  const chapterPrefix = lang === 'id' ? 'Bab' : 'Chapter';
+  const copyrightText =
+    lang === 'id'
+      ? `Hak Cipta © ${year} oleh ${escapeHtml(author)}. Diterbitkan oleh ${escapeHtml(publisher)}. Seluruh hak cipta dilindungi undang-undang.`
+      : `Copyright © ${year} by ${escapeHtml(author)}. Published by ${escapeHtml(publisher)}. All rights reserved.`;
+  const fictionDisclaimer =
+    lang === 'id'
+      ? 'Karya ini merupakan cerita fiksi. Nama tokoh, tempat, dan peristiwa adalah hasil rekaan penulis.'
+      : 'This is a work of fiction. Names, characters, places, and incidents are products of the author’s imagination.';
+
+  const normalizedChapters = (params.chapters || []).map((ch, idx) => {
+    const num = Number(ch.number) > 0 ? Number(ch.number) : idx + 1;
+    const chTitle = String(ch.title || `${chapterPrefix} ${num}`).trim();
+    const anchorId = `chapter-${num}`;
+    return {
+      anchorId,
+      num,
+      tocLabel: `${chapterPrefix} ${num}: ${chTitle}`,
+      headingText: chTitle,
+      paragraphsHtml: formatChapterParagraphs(ch.content || '')
+    };
+  });
+
+  const tocItemsHtml = normalizedChapters
+    .map((ch) => `<li><a href="#${ch.anchorId}">${escapeHtml(ch.tocLabel)}</a></li>`)
+    .join('\n');
+
+  const chaptersSectionHtml = normalizedChapters
+    .map(
+      (ch) => `
+    <section class="chapter" id="${ch.anchorId}">
+      <div class="chapter-number">${escapeHtml(chapterPrefix.toUpperCase())} ${ch.num}</div>
+      <h1>${escapeHtml(ch.headingText)}</h1>
+      <div class="chapter-content">
+        ${ch.paragraphsHtml}
+      </div>
+    </section>`
+    )
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${lang}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.65;
+      color: #111827;
+      margin: 0;
+      padding: 0;
+    }
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+    }
+    .title-page {
+      text-align: center;
+      padding-top: 20%;
+    }
+    .book-title {
+      font-size: 2.1em;
+      font-weight: bold;
+      margin-bottom: 0.4em;
+    }
+    .book-subtitle {
+      font-size: 1.15em;
+      font-style: italic;
+      color: #4b5563;
+      margin-bottom: 2em;
+    }
+    .book-author {
+      font-size: 1.2em;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2em;
+    }
+    .book-publisher {
+      font-size: 0.95em;
+      color: #6b7280;
+      margin-top: 3em;
+    }
+    .copyright-page {
+      page-break-before: always;
+      break-before: page;
+      padding-top: 40%;
+      font-size: 0.9em;
+      color: #374151;
+    }
+    .toc-page {
+      page-break-before: always;
+      break-before: page;
+    }
+    .toc-page h1 {
+      text-align: center;
+      font-size: 1.6em;
+      margin-bottom: 1.2em;
+    }
+    .toc-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    .toc-list li {
+      margin-bottom: 0.65em;
+      border-bottom: 1px dotted #d1d5db;
+      padding-bottom: 0.25em;
+    }
+    .toc-list a {
+      text-decoration: none;
+      color: #111827;
+    }
+    .chapter {
+      page-break-before: always;
+      break-before: page;
+    }
+    .chapter-number {
+      text-align: center;
+      font-size: 0.85em;
+      letter-spacing: 0.14em;
+      color: #6b7280;
+      margin-top: 1.5em;
+    }
+    .chapter h1 {
+      text-align: center;
+      font-size: 1.55em;
+      margin-top: 0.3em;
+      margin-bottom: 1.4em;
+    }
+    .chapter-content p {
+      text-indent: 1.5em;
+      margin: 0 0 0.75em 0;
+      text-align: justify;
+    }
+    .chapter-content p:first-of-type {
+      text-indent: 0;
+    }
+  </style>
+</head>
+<body>
+  <section class="title-page">
+    <div class="book-title">${escapeHtml(title)}</div>
+    ${subtitle ? `<div class="book-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+    <div class="book-author">${escapeHtml(author)}</div>
+    <div class="book-publisher">${escapeHtml(publisher)}</div>
+  </section>
+
+  <section class="copyright-page">
+    <p>${copyrightText}</p>
+    <p>${fictionDisclaimer}</p>
+  </section>
+
+  <nav class="toc-page" id="toc" epub:type="toc" role="doc-toc">
+    <h1>${escapeHtml(tocHeading)}</h1>
+    <ol class="toc-list">
+      ${tocItemsHtml}
+    </ol>
+  </nav>
+
+  ${chaptersSectionHtml}
+</body>
+</html>`;
+}
+
+/**
+ * Mengirim paket naskah, cover, dan metadata ke Google Apps Script webhook.
+ */
+export async function uploadPackageToDrive(payload: DrivePackagePayload) {
+  const webhookUrl =
+    getEnv('DRIVE_UPLOAD_WEBHOOK_URL') ||
+    getEnv('DRIVE_WEBHOOK_URL') ||
+    getEnv('DRIVE_BRIDGE_URL');
+
+  if (!webhookUrl) {
+    throw new Error('DRIVE_UPLOAD_WEBHOOK_URL kosong');
+  }
+
+  const secret = getEnv('DRIVE_BRIDGE_SECRET');
+  const body = {
+    ...payload,
+    author: payload.author || getEnv('DEFAULT_AUTHOR_NAME') || 'M. F. JULIAN',
+    publisher: payload.publisher || getEnv('DEFAULT_PUBLISHER_NAME') || 'cuannovelkarya',
+    language: normalizeLang(payload.language || getEnv('DEFAULT_LANGUAGE')),
+    ...(secret ? { secret } : {})
+  };
+
+  const res = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store'
+  });
+
+  const text = await res.text().catch(() => '');
+  let parsed: unknown = text;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    // biarkan teks apa adanya
+  }
+
+  if (!res.ok) {
+    throw new Error(`Upload Drive gagal (${res.status}): ${text}`);
+  }
+
+  return parsed;
 }
 
 export function auditNovelBeforePackaging(params: {
