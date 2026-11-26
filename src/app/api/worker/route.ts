@@ -309,7 +309,10 @@ async function purgeProjectCompletely(projectId: string | null) {
 }
 
 async function uploadToDriveBridge(payload: Record<string, unknown>): Promise<string | null> {
-  const bridgeUrl = getEnv('DRIVE_UPLOAD_WEBHOOK_URL');
+  const bridgeUrl =
+    getEnv('DRIVE_UPLOAD_WEBHOOK_URL') ||
+    getEnv('DRIVE_WEBHOOK_URL') ||
+    getEnv('DRIVE_BRIDGE_URL');
   const bridgeSecret = getEnv('DRIVE_BRIDGE_SECRET');
   if (!bridgeUrl) return null;
 
@@ -317,7 +320,7 @@ async function uploadToDriveBridge(payload: Record<string, unknown>): Promise<st
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      secret: bridgeSecret,
+      ...(bridgeSecret ? { secret: bridgeSecret } : {}),
       ...payload
     }),
     cache: 'no-store'
@@ -400,16 +403,18 @@ function buildInteriorHtml(
       : `Bab ${ch.chapter_number}: ${cleanTitle}`;
     return {
       ch,
+      anchorId: `chapter-${ch.chapter_number}`,
       cleanTitle,
       startPage,
       label
     };
   });
 
+  // Menggunakan <li><a href="#chapter-X"> agar terdeteksi otomatis sebagai Interactive TOC oleh Kindle KDP
   const tocRows = tocEntries
     .map(
       (entry) =>
-        `<div class="toc-row"><span class="toc-label">${escapeHtml(entry.label)}</span><span class="toc-page">${entry.startPage}</span></div>`
+        `<li class="toc-row"><a class="toc-label" href="#${entry.anchorId}">${escapeHtml(entry.label)}</a><span class="toc-page">${entry.startPage}</span></li>`
     )
     .join('\n');
 
@@ -454,15 +459,15 @@ function buildInteriorHtml(
     `;
 
   const chapterHtml = tocEntries
-    .map(({ ch, cleanTitle, startPage }) => {
+    .map(({ ch, anchorId, cleanTitle, startPage }) => {
       const paragraphs = splitIntoParagraphs(ch.content)
         .map((p) => `<p>${escapeHtml(p)}</p>`)
         .join('\n');
       return `
-        <article class="book-sheet chapter-sheet" data-page="${startPage}">
+        <article class="book-sheet chapter-sheet" id="${anchorId}" data-page="${startPage}">
           <div class="running-header">${escapeHtml(project.title)}</div>
           <div class="chapter-number-label">${isEn ? `CHAPTER ${ch.chapter_number}` : `BAB ${ch.chapter_number}`}</div>
-          <h2 class="chapter-title">${escapeHtml(cleanTitle)}</h2>
+          <h1 class="chapter-title">${escapeHtml(cleanTitle)}</h1>
           <div class="chapter-body">
             ${paragraphs}
           </div>
@@ -473,7 +478,7 @@ function buildInteriorHtml(
     .join('\n');
 
   return `<!DOCTYPE html>
-<html lang="${isEn ? 'en' : 'id'}">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${isEn ? 'en' : 'id'}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -543,12 +548,12 @@ function buildInteriorHtml(
   p { font-size: 10.5pt; line-height: 1.72; margin: 0 0 9px 0; text-indent: 1.35em; text-align: justify; }
   p.no-indent { text-indent: 0; text-align: left; margin-bottom: 11px; }
   p.signature { text-indent: 0; text-align: left; font-style: italic; margin-top: 18px; font-weight: 600; }
-  .toc-list { margin-top: 10px; }
+  .toc-list { list-style: none; padding-left: 0; margin: 10px 0 0 0; }
   .toc-row {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
     padding: 7px 0; border-bottom: 1px dotted #cbd5e1; font-size: 10.5pt;
   }
-  .toc-label { flex: 1; color: #0f172a; }
+  .toc-label { flex: 1; color: #0f172a; text-decoration: none; }
   .toc-page { font-weight: 700; color: #334155; min-width: 28px; text-align: right; }
   .running-header { font-size: 8.5pt; color: #64748b; text-align: center; margin-bottom: 14px; letter-spacing: 0.4px; }
   .running-footer {
@@ -559,7 +564,7 @@ function buildInteriorHtml(
 </head>
 <body>
   <section class="book-sheet title-sheet" data-page="1">
-    <h1 class="book-title-main">${escapeHtml(project.title)}</h1>
+    <div class="book-title-main">${escapeHtml(project.title)}</div>
     <div class="title-divider"></div>
     <div class="book-author-main">${escapeHtml(project.pen_name)}</div>
     <div class="book-publisher-sub">${escapeHtml(batch.publisher_name)}</div>
@@ -573,12 +578,12 @@ function buildInteriorHtml(
     ${openingAck}
   </section>
 
-  <section class="book-sheet" data-page="4">
-    <div class="section-heading">${isEn ? 'Table of Contents' : 'Daftar Isi'}</div>
-    <div class="toc-list">
+  <nav class="book-sheet" id="toc" epub:type="toc" role="doc-toc" data-page="4">
+    <h1 class="section-heading">${isEn ? 'Table of Contents' : 'Daftar Isi'}</h1>
+    <ol class="toc-list">
       ${tocRows}
-    </div>
-  </section>
+    </ol>
+  </nav>
 
   ${chapterHtml}
 
@@ -612,6 +617,8 @@ async function callCoverDesignerAgent(params: {
 }): Promise<{
   ebookCoverSvg: string;
   paperbackCoverSvg: string;
+  ebookPngBase64?: string;
+  wrapPngBase64?: string;
   spineWidthInches: number;
   estimatedPages: number;
 }> {
@@ -630,7 +637,10 @@ async function callCoverDesignerAgent(params: {
         genre: params.project.genre || 'FICTION',
         synopsis: params.project.synopsis,
         author: params.project.pen_name || params.batch.author_name || 'M. F. Julian',
-        publisher: params.batch.publisher_name || 'cuannovelkarya'
+        publisher: params.batch.publisher_name || 'cuannovelkarya',
+        language: params.batch.language || 'id',
+        pageCount: estimatedPages,
+        uploadToDrive: false
       }),
       signal: controller.signal,
       cache: 'no-store'
@@ -645,6 +655,8 @@ async function callCoverDesignerAgent(params: {
       ok?: boolean;
       ebookSvg?: string;
       wrapSvg?: string;
+      ebookDataUri?: string;
+      wrapDataUri?: string;
       error?: string;
     };
 
@@ -652,9 +664,18 @@ async function callCoverDesignerAgent(params: {
       throw new Error(json?.error || 'Cover Designer Agent tidak mengembalikan SVG cover.');
     }
 
+    const ebookPngBase64 = json.ebookDataUri?.startsWith('data:image/png;base64,')
+      ? json.ebookDataUri.replace('data:image/png;base64,', '')
+      : undefined;
+    const wrapPngBase64 = json.wrapDataUri?.startsWith('data:image/png;base64,')
+      ? json.wrapDataUri.replace('data:image/png;base64,', '')
+      : undefined;
+
     return {
       ebookCoverSvg: json.ebookSvg,
       paperbackCoverSvg: json.wrapSvg,
+      ebookPngBase64,
+      wrapPngBase64,
       spineWidthInches,
       estimatedPages
     };
@@ -1025,6 +1046,8 @@ async function runNextQueueStep(req?: NextRequest) {
       const {
         ebookCoverSvg,
         paperbackCoverSvg,
+        ebookPngBase64,
+        wrapPngBase64,
         spineWidthInches,
         estimatedPages
       } = await callCoverDesignerAgent({
@@ -1055,6 +1078,8 @@ async function runNextQueueStep(req?: NextRequest) {
         interiorHtml,
         ebookCoverSvg,
         paperbackCoverSvg,
+        ...(ebookPngBase64 ? { ebookPngBase64 } : {}),
+        ...(wrapPngBase64 ? { wrapPngBase64 } : {}),
         spineWidthInches,
         estimatedPages,
         metadataTxt
