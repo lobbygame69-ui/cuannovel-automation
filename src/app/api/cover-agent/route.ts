@@ -112,7 +112,7 @@ function buildArtisticFrameSvg(params: {
   const { x, y, w, h, accent } = params;
   const x2 = x + w;
   const y2 = y + h;
-  const c = 42; // ukuran potongan sudut artistik
+  const c = 42;
 
   const outerChamfer = [
     `M ${x + c} ${y}`,
@@ -135,7 +135,6 @@ function buildArtisticFrameSvg(params: {
   return `
     <path d="${outerChamfer}" fill="none" stroke="${escapeXml(accent)}" stroke-width="3.5" opacity="0.88"/>
     <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="none" stroke="${escapeXml(accent)}" stroke-width="1.4" opacity="0.48"/>
-    <!-- Ornamen sudut artistik -->
     <path d="M ${x - 6} ${y + 95} L ${x - 6} ${y + 24} L ${x + 24} ${y - 6} L ${x + 95} ${y - 6}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
     <path d="M ${x2 - 95} ${y - 6} L ${x2 - 24} ${y - 6} L ${x2 + 6} ${y + 24} L ${x2 + 6} ${y + 95}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
     <path d="M ${x - 6} ${y2 - 95} L ${x - 6} ${y2 - 24} L ${x + 24} ${y2 + 6} L ${x + 95} ${y2 + 6}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
@@ -319,13 +318,12 @@ async function fetchFreeAiArtworkBuffer(params: {
   return { buffer: null, provider: 'fallback-gradient' };
 }
 
-// Memotong bagian bawah gambar sumber agar watermark / tulisan di bawah hilang bersih
 async function cropCleanArtworkPanel(
   sourceBuffer: Buffer,
   targetW: number,
   targetH: number
 ): Promise<Buffer> {
-  const overHeight = Math.round(targetH * 1.12);
+  const overHeight = Math.round(targetH * 1.14);
   const scaled = await sharp(sourceBuffer)
     .resize(targetW, overHeight, { fit: 'cover', position: 'top' })
     .png()
@@ -477,7 +475,7 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
         <stop offset="0%" stop-color="#040914" stop-opacity="0.68"/>
         <stop offset="45%" stop-color="#040914" stop-opacity="0.12"/>
         <stop offset="88%" stop-color="#040914" stop-opacity="0.45"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.92"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.95"/>
       </linearGradient>
     </defs>
     <rect width="1600" height="2560" fill="url(#eb-scrim)"/>
@@ -540,17 +538,16 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
         <stop offset="0%" stop-color="#040914" stop-opacity="0.32"/>
         <stop offset="50%" stop-color="#040914" stop-opacity="0.62"/>
         <stop offset="88%" stop-color="#040914" stop-opacity="0.72"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.94"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.96"/>
       </linearGradient>
       <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#040914" stop-opacity="0.68"/>
         <stop offset="45%" stop-color="#040914" stop-opacity="0.12"/>
         <stop offset="88%" stop-color="#040914" stop-opacity="0.45"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.92"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.95"/>
       </linearGradient>
     </defs>
 
-    <!-- Back Cover Overlay -->
     <rect x="0" y="0" width="${dims.panelW}" height="${dims.totalH}" fill="url(#back-scrim)"/>
     <line x1="${backCenterX - 240}" y1="875" x2="${backCenterX + 240}" y2="875" stroke="${escapeXml(plan.accentColor)}" stroke-width="2" opacity="0.75"/>
     ${hookXml}
@@ -558,14 +555,11 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     ${closingXml}
     <text x="${backCenterX}" y="${closingStartY + 155}" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="34" fill="#e2e8f0">${escapeXml(plan.tagline)}</text>
 
-    <!-- Identitas Penerbit cuannovelkarya -->
     <polygon points="275,2275 320,2248 365,2275 365,2328 320,2355 275,2328" fill="none" stroke="${escapeXml(plan.accentColor)}" stroke-width="4"/>
     <text x="320" y="2415" text-anchor="middle" font-family="Georgia, serif" font-size="36" font-weight="bold" letter-spacing="2" fill="#f8fafc">${escapeXml(publisher)}</text>
 
-    <!-- Kotak Barcode Kosong Putih Bersih KDP -->
     <rect x="${dims.panelW - 705}" y="2225" width="565" height="340" rx="6" fill="#ffffff"/>
 
-    <!-- Spine -->
     <rect x="${dims.panelW}" y="0" width="${dims.spineW}" height="${dims.totalH}" fill="#081224"/>
     <g transform="translate(${spineCenterX}, ${Math.round(dims.totalH / 2)}) rotate(90)">
       <text x="-430" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="40" letter-spacing="4" fill="#f8fafc">${escapeXml(title)}</text>
@@ -573,7 +567,6 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
       <text x="430" y="14" text-anchor="middle" font-family="Georgia, serif" font-size="40" letter-spacing="4" fill="#f8fafc">${escapeXml(author.toUpperCase())}</text>
     </g>
 
-    <!-- Front Cover Overlay -->
     <rect x="${dims.panelW + dims.spineW}" y="0" width="${dims.panelW}" height="${dims.totalH}" fill="url(#front-scrim)"/>
     ${frontFrameSvg}
     <text x="${frontCenterX}" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="8" fill="#e2e8f0">${escapeXml(genre.toUpperCase())}</text>
@@ -599,6 +592,17 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
 
   const ebookPngBase64 = ebookPngBuffer.toString('base64');
   const wrapPngBase64 = wrapPngBuffer.toString('base64');
+  const ebookDataUri = `data:image/png;base64,${ebookPngBase64}`;
+  const wrapDataUri = `data:image/png;base64,${wrapPngBase64}`;
+
+  // SVG yang kompatibel dengan pemanggil lama yang mengecek ebookSvg & wrapSvg
+  const ebookSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
+    <image href="${ebookDataUri}" x="0" y="0" width="1600" height="2560" preserveAspectRatio="xMidYMid slice"/>
+  </svg>`;
+
+  const wrapSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dims.totalW}" height="${dims.totalH}" viewBox="0 0 ${dims.totalW} ${dims.totalH}">
+    <image href="${wrapDataUri}" x="0" y="0" width="${dims.totalW}" height="${dims.totalH}" preserveAspectRatio="xMidYMid slice"/>
+  </svg>`;
 
   const driveResult =
     input.uploadToDrive !== false
@@ -610,13 +614,14 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
           secret: secret || undefined,
           ebookPngBase64,
           wrapPngBase64,
-          ebookCoverSvg: ebookOverlaySvg,
-          paperbackCoverSvg: wrapOverlaySvg
+          ebookCoverSvg: ebookSvg,
+          paperbackCoverSvg: wrapSvg
         })
       : { uploaded: false, reason: 'uploadToDrive=false' };
 
   return {
     ok: true,
+    agent: 'cuannovel-cover-designer',
     title,
     author,
     publisher,
@@ -626,8 +631,10 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     backArtProvider: backArt.provider,
     dimensions: dims,
     drive: driveResult,
-    ebookDataUri: `data:image/png;base64,${ebookPngBase64}`,
-    wrapDataUri: `data:image/png;base64,${wrapPngBase64}`
+    ebookSvg,
+    wrapSvg,
+    ebookDataUri,
+    wrapDataUri
   };
 }
 
