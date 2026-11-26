@@ -20,8 +20,19 @@ interface CoverArtPlan {
   secondaryColor: string;
   accentColor: string;
   glowColor: string;
+  sceneTheme: 'glass_orchard' | 'celestial' | 'botanical' | 'urban_noir' | 'romantic_horizon' | 'mystic_arch';
   focalMotif: string;
   source: string;
+}
+
+interface ArtworkAttemptDiagnostic {
+  model: string;
+  keyIndex: number;
+  httpStatus: number | null;
+  ok: boolean;
+  partKinds: string[];
+  base64Length: number;
+  errorSnippet: string;
 }
 
 interface CoverAgentOutput {
@@ -39,6 +50,12 @@ interface CoverAgentOutput {
   wrapSvg: string;
   frontGenerated: boolean;
   backGenerated: boolean;
+  diagnostics: {
+    geminiKeyCount: number;
+    openRouterKeyPresent: boolean;
+    frontAttempts: ArtworkAttemptDiagnostic[];
+    backAttempts: ArtworkAttemptDiagnostic[];
+  };
 }
 
 function escapeHtml(value: string): string {
@@ -118,6 +135,43 @@ function hashSeed(input: string): number {
   return Math.abs(h) >>> 0;
 }
 
+function normalizeTheme(
+  rawTheme: unknown,
+  title: string,
+  genre: string,
+  synopsis: string
+): CoverArtPlan['sceneTheme'] {
+  const combined = `${title} ${genre} ${synopsis}`.toLowerCase();
+  if (/glass|orchard|crystal|prism|translucent|citadel|kaca|kristal/.test(combined)) {
+    return 'glass_orchard';
+  }
+
+  const t = String(rawTheme || '').toLowerCase().trim();
+  if (
+    t === 'celestial' ||
+    t === 'botanical' ||
+    t === 'urban_noir' ||
+    t === 'romantic_horizon' ||
+    t === 'mystic_arch'
+  ) {
+    return t;
+  }
+
+  if (/romance|love|heart|sunset|senja|cinta|rindu|wedding|autumn/.test(combined)) {
+    return 'romantic_horizon';
+  }
+  if (/forest|garden|nature|bloom|leaf|hutan|taman|bunga|alam/.test(combined)) {
+    return 'botanical';
+  }
+  if (/noir|crime|detective|city|rain|neon|shadow|kota|misteri|thriller/.test(combined)) {
+    return 'urban_noir';
+  }
+  if (/magic|fantasy|archive|ancient|ruin|sihir|fantasi|rahasia/.test(combined)) {
+    return 'mystic_arch';
+  }
+  return 'celestial';
+}
+
 function normalizeHex(raw: unknown, fallback: string): string {
   const val = String(raw || '').trim();
   return /^#[0-9a-fA-F]{6}$/.test(val) ? val : fallback;
@@ -148,7 +202,7 @@ async function callQwenCoverBrain(input: {
     `Author: ${input.author}`,
     `Synopsis: ${input.synopsis.slice(0, 500)}`,
     'Return ONLY valid JSON with exact keys:',
-    '{"frontPrompt":"detailed front cover scene prompt","backPrompt":"complementary back cover scene prompt","tagline":"evocative short quote","focalMotif":"3-6 word main visual motif","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
+    '{"frontPrompt":"detailed front cover scene prompt","backPrompt":"complementary back cover scene prompt","tagline":"evocative short quote","focalMotif":"3-6 word main visual motif","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
   ].join('\n');
 
   for (const model of qwenModels) {
@@ -197,6 +251,7 @@ async function callQwenCoverBrain(input: {
             parsed.tagline || '“An enchanting journey of memory, wonder, and fragile beauty.”'
           ).trim(),
           focalMotif: String(parsed.focalMotif || 'Luminous Citadel & Golden Tree').trim(),
+          sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
           primaryColor: normalizeHex(parsed.primaryColor, '#071224'),
           secondaryColor: normalizeHex(parsed.secondaryColor, '#12325b'),
           accentColor: normalizeHex(parsed.accentColor, '#f3c969'),
@@ -247,7 +302,7 @@ async function callGeminiCoverBrain(input: {
                         `Author: ${input.author}`,
                         `Synopsis: ${input.synopsis.slice(0, 450)}`,
                         'Return ONLY valid JSON:',
-                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
+                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
                       ].join('\n')
                     }
                   ]
@@ -276,6 +331,7 @@ async function callGeminiCoverBrain(input: {
               parsed.tagline || '“An enchanting journey of memory, wonder, and fragile beauty.”'
             ).trim(),
             focalMotif: String(parsed.focalMotif || 'Luminous Citadel & Golden Tree').trim(),
+            sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
             primaryColor: normalizeHex(parsed.primaryColor, '#071224'),
             secondaryColor: normalizeHex(parsed.secondaryColor, '#12325b'),
             accentColor: normalizeHex(parsed.accentColor, '#f3c969'),
@@ -313,6 +369,7 @@ async function planVisualDirection(input: {
     backPrompt: `Complementary fantasy back cover art for "${input.title}" (${input.genre}) showing a distant glowing citadel, floating light orbs, and tranquil night landscape. ${noTextRule}`,
     tagline: '“An enchanting journey of memory, wonder, and fragile beauty.”',
     focalMotif: 'Golden Tree in Crystal Sphere',
+    sceneTheme: normalizeTheme(null, input.title, input.genre, input.synopsis),
     primaryColor: '#071224',
     secondaryColor: '#12325b',
     accentColor: '#f3c969',
@@ -321,11 +378,16 @@ async function planVisualDirection(input: {
   };
 }
 
-async function generateArtworkDataUri(promptText: string): Promise<string | null> {
+async function generateArtworkDataUriWithDiagnostics(promptText: string): Promise<{
+  dataUri: string | null;
+  attempts: ArtworkAttemptDiagnostic[];
+}> {
   const keys = getGeminiKeys();
   const imageModels = ['gemini-2.5-flash-image', 'gemini-2.0-flash-exp-image-generation'];
+  const attempts: ArtworkAttemptDiagnostic[] = [];
 
-  for (const key of keys) {
+  for (let kIdx = 0; kIdx < keys.length; kIdx++) {
+    const key = keys[kIdx];
     for (const model of imageModels) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -343,33 +405,111 @@ async function generateArtworkDataUri(promptText: string): Promise<string | null
             cache: 'no-store'
           }
         );
-        if (!res.ok) continue;
 
-        const json = (await res.json().catch(() => null)) as {
+        const rawBody = await res.text().catch(() => '');
+        if (!res.ok) {
+          attempts.push({
+            model,
+            keyIndex: kIdx + 1,
+            httpStatus: res.status,
+            ok: false,
+            partKinds: [],
+            base64Length: 0,
+            errorSnippet: rawBody.slice(0, 220)
+          });
+          continue;
+        }
+
+        let parsedJson: {
           candidates?: Array<{
             content?: {
-              parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }>;
+              parts?: Array<{
+                text?: string;
+                inlineData?: { mimeType?: string; data?: string };
+              }>;
             };
           }>;
-        } | null;
+        } | null = null;
 
-        const parts = json?.candidates?.[0]?.content?.parts || [];
+        try {
+          parsedJson = JSON.parse(rawBody);
+        } catch {
+          attempts.push({
+            model,
+            keyIndex: kIdx + 1,
+            httpStatus: res.status,
+            ok: false,
+            partKinds: ['invalid-json'],
+            base64Length: 0,
+            errorSnippet: rawBody.slice(0, 220)
+          });
+          continue;
+        }
+
+        const parts = parsedJson?.candidates?.[0]?.content?.parts || [];
+        const partKinds = parts.map((p) => {
+          if (p?.inlineData?.data) return `inlineData(${p.inlineData.mimeType || 'unknown'})`;
+          if (typeof p?.text === 'string') return 'text';
+          return 'other';
+        });
+
+        let maxB64Length = 0;
+        let textPreview = '';
+
         for (const part of parts) {
+          if (typeof part?.text === 'string' && part.text.trim()) {
+            textPreview = part.text.trim().slice(0, 160);
+          }
           const b64 = part?.inlineData?.data;
           const mime = part?.inlineData?.mimeType || 'image/png';
-          if (b64 && b64.length > 500) {
-            return `data:${mime};base64,${b64}`;
+          if (b64) {
+            maxB64Length = Math.max(maxB64Length, b64.length);
+            if (b64.length > 500) {
+              attempts.push({
+                model,
+                keyIndex: kIdx + 1,
+                httpStatus: res.status,
+                ok: true,
+                partKinds,
+                base64Length: b64.length,
+                errorSnippet: ''
+              });
+              return { dataUri: `data:${mime};base64,${b64}`, attempts };
+            }
           }
         }
-      } catch {
-        // lanjut
+
+        attempts.push({
+          model,
+          keyIndex: kIdx + 1,
+          httpStatus: res.status,
+          ok: false,
+          partKinds,
+          base64Length: maxB64Length,
+          errorSnippet:
+            textPreview ||
+            (maxB64Length === 0
+              ? 'Tidak ada inlineData pada respons candidates[0].content.parts'
+              : `Base64 terlalu pendek (${maxB64Length} chars)`)
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        attempts.push({
+          model,
+          keyIndex: kIdx + 1,
+          httpStatus: null,
+          ok: false,
+          partKinds: ['exception'],
+          base64Length: 0,
+          errorSnippet: msg.slice(0, 220)
+        });
       } finally {
         clearTimeout(timeoutId);
       }
     }
   }
 
-  return null;
+  return { dataUri: null, attempts };
 }
 
 function buildReferenceArtScene(params: {
@@ -502,8 +642,11 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
   const publisher = String(input.publisher || 'cuannovelkarya').trim();
 
   const plan = await planVisualDirection({ title, genre, synopsis, author });
-  const frontArt = await generateArtworkDataUri(plan.frontPrompt);
-  const backArt = await generateArtworkDataUri(plan.backPrompt);
+  const frontResult = await generateArtworkDataUriWithDiagnostics(plan.frontPrompt);
+  const backResult = await generateArtworkDataUriWithDiagnostics(plan.backPrompt);
+
+  const frontArt = frontResult.dataUri;
+  const backArt = backResult.dataUri;
 
   const titleLines = wrapSvgLines(title, 13, 2);
   const blocks = splitSynopsisIntoBlocks(synopsis);
@@ -629,6 +772,7 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     <polygon points="275,2275 320,2248 365,2275 365,2328 320,2355 275,2328" fill="none" stroke="${escapeHtml(plan.accentColor)}" stroke-width="4"/>
     <text x="320" y="2415" text-anchor="middle" font-family="Georgia, serif" font-size="36" font-weight="bold" letter-spacing="2" fill="#f8fafc">${escapeHtml(publisher)}</text>
 
+    <!-- Area barcode kosong putih bersih -->
     <rect x="1135" y="2225" width="565" height="340" rx="6" fill="#ffffff"/>
   </g>
 
@@ -665,7 +809,13 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     ebookSvg,
     wrapSvg,
     frontGenerated: Boolean(frontArt),
-    backGenerated: Boolean(backArt)
+    backGenerated: Boolean(backArt),
+    diagnostics: {
+      geminiKeyCount: getGeminiKeys().length,
+      openRouterKeyPresent: Boolean(getEnv('OPENROUTER_API_KEY')),
+      frontAttempts: frontResult.attempts,
+      backAttempts: backResult.attempts
+    }
   };
 }
 
@@ -721,11 +871,12 @@ export async function GET(req: NextRequest) {
     .svg-box { width: 100%; border-radius: 8px; overflow: hidden; background: #090d14; }
     .svg-box svg { width: 100%; height: auto; display: block; }
     h2 { margin: 0 0 10px; font-size: 15px; }
+    pre { background: #0b111d; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; color: #cbd5e1; border: 1px solid #1e293b; }
   </style>
 </head>
 <body>
   <h1>Cover Designer Agent: ${escapeHtml(result.title)}</h1>
-  <div class="meta">Brain: ${escapeHtml(result.brainProvider)} | Motif: ${escapeHtml(result.focalMotif)} | Front AI: ${result.frontGenerated ? 'Yes' : 'Layered Art'} | Back AI: ${result.backGenerated ? 'Yes' : 'Layered Art'}</div>
+  <div class="meta">Brain: ${escapeHtml(result.brainProvider)} | Motif: ${escapeHtml(result.focalMotif)} | Front AI: ${result.frontGenerated ? 'Yes' : 'Fallback Scene'} | Back AI: ${result.backGenerated ? 'Yes' : 'Fallback Scene'}</div>
   <div class="grid">
     <div class="card">
       <h2>E-Book Cover</h2>
@@ -736,6 +887,8 @@ export async function GET(req: NextRequest) {
       <div class="svg-box">${result.wrapSvg}</div>
     </div>
   </div>
+  <h2>Raw Artwork Diagnostics</h2>
+  <pre>${escapeHtml(JSON.stringify(result.diagnostics, null, 2))}</pre>
 </body>
 </html>`;
 
