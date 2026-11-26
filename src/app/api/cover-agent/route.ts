@@ -11,6 +11,7 @@ interface CoverAgentInput {
   synopsis: string;
   author?: string;
   publisher?: string;
+  language?: string;
   pageCount?: number;
   uploadToDrive?: boolean;
 }
@@ -89,18 +90,61 @@ function splitSynopsis(synopsis: string): {
 }
 
 function calculateKdpWrapDimensions(pageCount = 180) {
-  // Ukuran standar KDP 6 x 9 inci pada 300 DPI + bleed 0.125 inci
-  const trimW = 1800; // 6 in * 300
-  const trimH = 2700; // 9 in * 300
-  const bleed = 38; // 0.125 in * 300
+  const trimW = 1800;
+  const trimH = 2700;
+  const bleed = 38;
   const safePages = Math.max(24, Math.min(828, Number(pageCount) || 180));
-  // Rumus ketebalan kertas cream KDP: 0.0025 inci per halaman * 300 DPI
   const spineW = Math.max(75, Math.round(safePages * 0.0025 * 300));
-  const panelW = trimW + bleed; // 1838 px
-  const totalH = trimH + bleed * 2; // 2776 px
+  const panelW = trimW + bleed;
+  const totalH = trimH + bleed * 2;
   const totalW = panelW * 2 + spineW;
 
   return { panelW, spineW, totalW, totalH, bleed };
+}
+
+function buildArtisticFrameSvg(params: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  accent: string;
+}): string {
+  const { x, y, w, h, accent } = params;
+  const x2 = x + w;
+  const y2 = y + h;
+  const c = 42; // ukuran potongan sudut artistik
+
+  const outerChamfer = [
+    `M ${x + c} ${y}`,
+    `L ${x2 - c} ${y}`,
+    `L ${x2} ${y + c}`,
+    `L ${x2} ${y2 - c}`,
+    `L ${x2 - c} ${y2}`,
+    `L ${x + c} ${y2}`,
+    `L ${x} ${y2 - c}`,
+    `L ${x} ${y + c}`,
+    `Z`
+  ].join(' ');
+
+  const innerInset = 14;
+  const ix = x + innerInset;
+  const iy = y + innerInset;
+  const iw = w - innerInset * 2;
+  const ih = h - innerInset * 2;
+
+  return `
+    <path d="${outerChamfer}" fill="none" stroke="${escapeXml(accent)}" stroke-width="3.5" opacity="0.88"/>
+    <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="none" stroke="${escapeXml(accent)}" stroke-width="1.4" opacity="0.48"/>
+    <!-- Ornamen sudut artistik -->
+    <path d="M ${x - 6} ${y + 95} L ${x - 6} ${y + 24} L ${x + 24} ${y - 6} L ${x + 95} ${y - 6}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M ${x2 - 95} ${y - 6} L ${x2 - 24} ${y - 6} L ${x2 + 6} ${y + 24} L ${x2 + 6} ${y + 95}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M ${x - 6} ${y2 - 95} L ${x - 6} ${y2 - 24} L ${x + 24} ${y2 + 6} L ${x + 95} ${y2 + 6}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M ${x2 - 95} ${y2 + 6} L ${x2 - 24} ${y2 + 6} L ${x2 + 6} ${y2 - 24} L ${x2 + 6} ${y2 - 95}" fill="none" stroke="${escapeXml(accent)}" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="${x + 26}" cy="${y + 26}" r="5" fill="${escapeXml(accent)}"/>
+    <circle cx="${x2 - 26}" cy="${y + 26}" r="5" fill="${escapeXml(accent)}"/>
+    <circle cx="${x + 26}" cy="${y2 - 26}" r="5" fill="${escapeXml(accent)}"/>
+    <circle cx="${x2 - 26}" cy="${y2 - 26}" r="5" fill="${escapeXml(accent)}"/>
+  `;
 }
 
 async function generateArtDirectionWithQwen(input: {
@@ -111,7 +155,7 @@ async function generateArtDirectionWithQwen(input: {
 }): Promise<CoverArtPlan> {
   const openRouterKey = getEnv('OPENROUTER_API_KEY');
   const noTextRule =
-    'epic digital fantasy book illustration, rich atmospheric lighting, cinematic depth, intricate details, no text, no letters, no typography, no watermark, no border';
+    'epic digital fantasy book illustration, rich atmospheric lighting, cinematic depth, intricate details, clean composition without any text, without letters, without words, without signature or watermark';
 
   if (openRouterKey) {
     const models = [
@@ -186,7 +230,7 @@ async function generateArtDirectionWithQwen(input: {
           }
         }
       } catch {
-        // lanjut ke model Qwen berikutnya
+        // lanjut
       } finally {
         clearTimeout(timer);
       }
@@ -212,7 +256,6 @@ async function fetchFreeAiArtworkBuffer(params: {
   height: number;
   seed: number;
 }): Promise<{ buffer: Buffer | null; provider: string }> {
-  // Jalur 1: Pollinations FLUX / Turbo (Gratis, tanpa API key & tanpa kredit)
   const models = ['flux', 'turbo'];
   for (const model of models) {
     const controller = new AbortController();
@@ -235,13 +278,12 @@ async function fetchFreeAiArtworkBuffer(params: {
         }
       }
     } catch {
-      // coba model berikutnya
+      // lanjut
     } finally {
       clearTimeout(timer);
     }
   }
 
-  // Jalur 2: Cadangan Gemini Image jika kuota tersedia
   const geminiKey = getEnv('GEMINI_API_KEY') || getEnv('GEMINI_API_KEY_BACKUP');
   if (geminiKey) {
     try {
@@ -270,11 +312,29 @@ async function fetchFreeAiArtworkBuffer(params: {
         }
       }
     } catch {
-      // abaikan jika kuota 429
+      // abaikan
     }
   }
 
   return { buffer: null, provider: 'fallback-gradient' };
+}
+
+// Memotong bagian bawah gambar sumber agar watermark / tulisan di bawah hilang bersih
+async function cropCleanArtworkPanel(
+  sourceBuffer: Buffer,
+  targetW: number,
+  targetH: number
+): Promise<Buffer> {
+  const overHeight = Math.round(targetH * 1.12);
+  const scaled = await sharp(sourceBuffer)
+    .resize(targetW, overHeight, { fit: 'cover', position: 'top' })
+    .png()
+    .toBuffer();
+
+  return sharp(scaled)
+    .extract({ left: 0, top: 0, width: targetW, height: targetH })
+    .png()
+    .toBuffer();
 }
 
 function buildFallbackBaseSvg(
@@ -306,13 +366,20 @@ async function sendFilesToGoogleDriveWebhook(payload: {
   title: string;
   author: string;
   publisher: string;
+  language: string;
+  secret?: string;
   ebookPngBase64: string;
   wrapPngBase64: string;
-  wrapSvg: string;
+  ebookCoverSvg: string;
+  paperbackCoverSvg: string;
 }) {
-  const webhookUrl = getEnv('DRIVE_WEBHOOK_URL');
+  const webhookUrl =
+    getEnv('DRIVE_WEBHOOK_URL') ||
+    getEnv('DRIVE_BRIDGE_URL') ||
+    getEnv('DRIVE_UPLOAD_WEBHOOK_URL');
+
   if (!webhookUrl) {
-    return { uploaded: false, reason: 'DRIVE_WEBHOOK_URL belum diatur di environment Vercel' };
+    return { uploaded: false, reason: 'URL webhook Drive belum diatur di Vercel' };
   }
 
   const res = await fetch(webhookUrl, {
@@ -341,8 +408,12 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
   const title = String(input.title || 'Untitled Novel').trim();
   const genre = String(input.genre || 'FICTION').trim();
   const synopsis = String(input.synopsis || '').trim();
-  const author = String(input.author || 'M. F. Julian').trim();
-  const publisher = String(input.publisher || 'cuannovelkarya').trim();
+  const author = String(input.author || getEnv('DEFAULT_AUTHOR_NAME') || 'M. F. Julian').trim();
+  const publisher = String(
+    input.publisher || getEnv('DEFAULT_PUBLISHER_NAME') || 'cuannovelkarya'
+  ).trim();
+  const language = String(input.language || getEnv('DEFAULT_LANGUAGE') || 'id').trim();
+  const secret = String(getEnv('DRIVE_BRIDGE_SECRET') || '').trim();
   const dims = calculateKdpWrapDimensions(input.pageCount);
 
   const plan = await generateArtDirectionWithQwen({ title, genre, synopsis, author });
@@ -351,7 +422,6 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     title.split('').reduce((acc, ch) => acc * 31 + ch.charCodeAt(0), 7)
   );
 
-  // Generate ilustrasi depan & belakang secara paralel
   const [frontArt, backArt] = await Promise.all([
     fetchFreeAiArtworkBuffer({
       prompt: plan.frontPrompt,
@@ -368,32 +438,24 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
   ]);
 
   const frontBaseBuffer = frontArt.buffer
-    ? await sharp(frontArt.buffer)
-        .resize(dims.panelW, dims.totalH, { fit: 'cover', position: 'centre' })
-        .png()
-        .toBuffer()
+    ? await cropCleanArtworkPanel(frontArt.buffer, dims.panelW, dims.totalH)
     : await sharp(Buffer.from(buildFallbackBaseSvg(dims.panelW, dims.totalH, plan, true)))
         .png()
         .toBuffer();
 
   const backBaseBuffer = backArt.buffer
-    ? await sharp(backArt.buffer)
-        .resize(dims.panelW, dims.totalH, { fit: 'cover', position: 'centre' })
-        .png()
-        .toBuffer()
+    ? await cropCleanArtworkPanel(backArt.buffer, dims.panelW, dims.totalH)
     : await sharp(Buffer.from(buildFallbackBaseSvg(dims.panelW, dims.totalH, plan, false)))
         .png()
         .toBuffer();
 
-  const ebookBaseBuffer = await sharp(frontBaseBuffer)
-    .resize(1600, 2560, { fit: 'cover', position: 'centre' })
-    .png()
-    .toBuffer();
+  const ebookBaseBuffer = frontArt.buffer
+    ? await cropCleanArtworkPanel(frontArt.buffer, 1600, 2560)
+    : await sharp(frontBaseBuffer).resize(1600, 2560, { fit: 'cover' }).png().toBuffer();
 
   const titleLines = wrapLines(title, 13, 2);
   const syn = splitSynopsis(synopsis);
 
-  // Overlay tipografi E-Book Cover (1600 x 2560)
   const ebookTitleXml = titleLines
     .map(
       (line, idx) =>
@@ -401,16 +463,25 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     )
     .join('\n');
 
+  const ebookFrameSvg = buildArtisticFrameSvg({
+    x: 64,
+    y: 64,
+    w: 1472,
+    h: 2432,
+    accent: plan.accentColor
+  });
+
   const ebookOverlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
     <defs>
       <linearGradient id="eb-scrim" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#040914" stop-opacity="0.65"/>
+        <stop offset="0%" stop-color="#040914" stop-opacity="0.68"/>
         <stop offset="45%" stop-color="#040914" stop-opacity="0.12"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.72"/>
+        <stop offset="88%" stop-color="#040914" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.92"/>
       </linearGradient>
     </defs>
     <rect width="1600" height="2560" fill="url(#eb-scrim)"/>
-    <rect x="64" y="64" width="1472" height="2432" fill="none" stroke="${escapeXml(plan.accentColor)}" stroke-width="3" opacity="0.82"/>
+    ${ebookFrameSvg}
     <text x="800" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="8" fill="#e2e8f0">${escapeXml(genre.toUpperCase())}</text>
     ${ebookTitleXml}
     <text x="800" y="2365" text-anchor="middle" font-family="Georgia, serif" font-size="82" letter-spacing="6" fill="#f8fafc">${escapeXml(author.toUpperCase())}</text>
@@ -421,7 +492,6 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     .png()
     .toBuffer();
 
-  // Overlay tipografi Paperback Full-Wrap (Back + Spine + Front + Kotak Barcode Kosong)
   const frontCenterX = dims.panelW + dims.spineW + Math.round(dims.panelW / 2);
   const spineCenterX = dims.panelW + Math.round(dims.spineW / 2);
   const backCenterX = Math.round(dims.panelW / 2);
@@ -456,17 +526,27 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     )
     .join('\n');
 
+  const frontFrameSvg = buildArtisticFrameSvg({
+    x: dims.panelW + dims.spineW + 96,
+    y: 130,
+    w: dims.panelW - 192,
+    h: dims.totalH - 260,
+    accent: plan.accentColor
+  });
+
   const wrapOverlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dims.totalW}" height="${dims.totalH}" viewBox="0 0 ${dims.totalW} ${dims.totalH}">
     <defs>
       <linearGradient id="back-scrim" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#040914" stop-opacity="0.32"/>
         <stop offset="50%" stop-color="#040914" stop-opacity="0.62"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.72"/>
+        <stop offset="88%" stop-color="#040914" stop-opacity="0.72"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.94"/>
       </linearGradient>
       <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#040914" stop-opacity="0.65"/>
+        <stop offset="0%" stop-color="#040914" stop-opacity="0.68"/>
         <stop offset="45%" stop-color="#040914" stop-opacity="0.12"/>
-        <stop offset="100%" stop-color="#040914" stop-opacity="0.72"/>
+        <stop offset="88%" stop-color="#040914" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#040914" stop-opacity="0.92"/>
       </linearGradient>
     </defs>
 
@@ -495,7 +575,7 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
 
     <!-- Front Cover Overlay -->
     <rect x="${dims.panelW + dims.spineW}" y="0" width="${dims.panelW}" height="${dims.totalH}" fill="url(#front-scrim)"/>
-    <rect x="${dims.panelW + dims.spineW + 96}" y="130" width="${dims.panelW - 192}" height="${dims.totalH - 260}" fill="none" stroke="${escapeXml(plan.accentColor)}" stroke-width="3" opacity="0.82"/>
+    ${frontFrameSvg}
     <text x="${frontCenterX}" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="8" fill="#e2e8f0">${escapeXml(genre.toUpperCase())}</text>
     ${wrapTitleXml}
     <text x="${frontCenterX}" y="2555" text-anchor="middle" font-family="Georgia, serif" font-size="88" letter-spacing="6" fill="#f8fafc">${escapeXml(author.toUpperCase())}</text>
@@ -526,9 +606,12 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
           title,
           author,
           publisher,
+          language,
+          secret: secret || undefined,
           ebookPngBase64,
           wrapPngBase64,
-          wrapSvg: wrapOverlaySvg
+          ebookCoverSvg: ebookOverlaySvg,
+          paperbackCoverSvg: wrapOverlaySvg
         })
       : { uploaded: false, reason: 'uploadToDrive=false' };
 
@@ -537,6 +620,7 @@ async function buildFinishedBookCovers(input: CoverAgentInput) {
     title,
     author,
     publisher,
+    language,
     brainProvider: plan.source,
     frontArtProvider: frontArt.provider,
     backArtProvider: backArt.provider,
@@ -561,8 +645,9 @@ export async function POST(req: NextRequest) {
       title: String(body.title),
       genre: body.genre ? String(body.genre) : 'FICTION',
       synopsis: String(body.synopsis),
-      author: body.author ? String(body.author) : 'M. F. Julian',
-      publisher: body.publisher ? String(body.publisher) : 'cuannovelkarya',
+      author: body.author ? String(body.author) : undefined,
+      publisher: body.publisher ? String(body.publisher) : undefined,
+      language: body.language ? String(body.language) : undefined,
       pageCount: body.pageCount ? Number(body.pageCount) : 180,
       uploadToDrive: body.uploadToDrive !== false
     });
@@ -580,8 +665,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const title = (searchParams.get('title') || 'The Glass Orchard').trim();
   const genre = (searchParams.get('genre') || 'SPECULATIVE FICTION').trim();
-  const author = (searchParams.get('author') || 'M. F. Julian').trim();
-  const publisher = (searchParams.get('publisher') || 'cuannovelkarya').trim();
+  const author = (searchParams.get('author') || '').trim() || undefined;
+  const publisher = (searchParams.get('publisher') || '').trim() || undefined;
+  const language = (searchParams.get('lang') || '').trim() || undefined;
   const pageCount = Number(searchParams.get('pages') || '180');
   const uploadToDrive = searchParams.get('drive') === '1';
 
@@ -596,6 +682,7 @@ export async function GET(req: NextRequest) {
     synopsis,
     author,
     publisher,
+    language,
     pageCount,
     uploadToDrive
   });
@@ -608,7 +695,7 @@ export async function GET(req: NextRequest) {
   <title>Auto Cover Studio — ${escapeXml(result.title)}</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #090d14; color: #f8fafc; padding: 20px; margin: 0; }
-    .meta { font-size: 13px; color: #cbd5e1; margin-bottom: 18px; }
+    .meta { font-size: 13px; color: #cbd5e1; margin-bottom: 18px; word-break: break-word; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
     .card { background: #131924; padding: 14px; border-radius: 12px; border: 1px solid #1e293b; }
     img { width: 100%; height: auto; border-radius: 8px; display: block; }
