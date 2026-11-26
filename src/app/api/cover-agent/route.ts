@@ -20,12 +20,19 @@ interface CoverArtPlan {
   secondaryColor: string;
   accentColor: string;
   glowColor: string;
-  sceneTheme: 'glass_orchard' | 'celestial' | 'botanical' | 'urban_noir' | 'romantic_horizon' | 'mystic_arch';
+  sceneTheme:
+    | 'glass_orchard'
+    | 'celestial'
+    | 'botanical'
+    | 'urban_noir'
+    | 'romantic_horizon'
+    | 'mystic_arch';
   focalMotif: string;
   source: string;
 }
 
 interface ArtworkAttemptDiagnostic {
+  provider: 'openrouter' | 'gemini';
   model: string;
   keyIndex: number;
   httpStatus: number | null;
@@ -378,13 +385,192 @@ async function planVisualDirection(input: {
   };
 }
 
+function extractImageSrcFromOpenRouterResponse(rawBody: string): {
+  src: string | null;
+  partKinds: string[];
+  b64Len: number;
+  snippet: string;
+} {
+  const partKinds: string[] = [];
+  let b64Len = 0;
+
+  try {
+    const parsed = JSON.parse(rawBody) as {
+      choices?: Array<{
+        message?: {
+          content?:
+            | string
+            | Array<{
+                type?: string;
+                text?: string;
+                image_url?: { url?: string };
+              }>;
+          images?: Array<{
+            type?: string;
+            image_url?: { url?: string };
+            url?: string;
+          }>;
+        };
+      }>;
+    };
+
+    const msg = parsed?.choices?.[0]?.message;
+    const msgImages = msg?.images || [];
+    for (const img of msgImages) {
+      const candidateUrl = img?.image_url?.url || img?.url || '';
+      if (candidateUrl) {
+        partKinds.push('message.image');
+        b64Len = Math.max(b64Len, candidateUrl.length);
+        if (candidateUrl.startsWith('data:image/') || candidateUrl.startsWith('http')) {
+          return { src: candidateUrl, partKinds, b64Len, snippet: '' };
+        }
+      }
+    }
+
+    if (Array.isArray(msg?.content)) {
+      for (const item of msg.content) {
+        if (item?.type === 'image_url' && item?.image_url?.url) {
+          partKinds.push('content.image_url');
+          b64Len = Math.max(b64Len, item.image_url.url.length);
+          return { src: item.image_url.url, partKinds, b64Len, snippet: '' };
+        }
+        if (item?.type === 'text' && item?.text) {
+          partKinds.push('content.text');
+          const dataMatch = item.text.match(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/);
+          if (dataMatch) {
+            b64Len = dataMatch[0].length;
+            return { src: dataMatch[0], partKinds, b64Len, snippet: '' };
+          }
+        }
+      }
+    } else if (typeof msg?.content === 'string') {
+      partKinds.push('string');
+      const dataMatch = msg.content.match(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/);
+      if (dataMatch) {
+        b64Len = dataMatch[0].length;
+        return { src: dataMatch[0], partKinds, b64Len, snippet: '' };
+      }
+      return {
+        src: null,
+        partKinds,
+        b64Len: 0,
+        snippet: msg.content.trim().slice(0, 180)
+      };
+    }
+
+    return {
+      src: null,
+      partKinds,
+      b64Len: 0,
+      snippet: 'Tidak ada gambar pada respons OpenRouter'
+    };
+  } catch {
+    return {
+      src: null,
+      partKinds: ['invalid-json'],
+      b64Len: 0,
+      snippet: rawBody.slice(0, 180)
+    };
+  }
+}
+
 async function generateArtworkDataUriWithDiagnostics(promptText: string): Promise<{
   dataUri: string | null;
   attempts: ArtworkAttemptDiagnostic[];
 }> {
-  const keys = getGeminiKeys();
-  const imageModels = ['gemini-2.5-flash-image', 'gemini-2.0-flash-exp-image-generation'];
   const attempts: ArtworkAttemptDiagnostic[] = [];
+
+  // 1. Coba via OpenRouter terlebih dahulu karena OPENROUTER_API_KEY aktif
+  const openRouterKey = getEnv('OPENROUTER_API_KEY');
+  if (openRouterKey) {
+    const orModels = [
+      'google/gemini-2.5-flash-image',
+      'black-forest-labs/flux.2-klein-4b',
+      'sourceful/riverflow-v2-fast'
+    ];
+
+    for (const model of orModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 22000);
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openRouterKey}`,
+            'HTTP-Referer': getEnv('APP_URL', 'https://cuannovel-automation.vercel.app'),
+            'X-Title': 'CuanNovel Cover Image Generator'
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: promptText }],
+            modalities: ['image', 'text']
+          }),
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+
+        const rawBody = await res.text().catch(() => '');
+        if (!res.ok) {
+          attempts.push({
+            provider: 'openrouter',
+            model,
+            keyIndex: 1,
+            httpStatus: res.status,
+            ok: false,
+            partKinds: [],
+            base64Length: 0,
+            errorSnippet: rawBody.slice(0, 220)
+          });
+          continue;
+        }
+
+        const extracted = extractImageSrcFromOpenRouterResponse(rawBody);
+        if (extracted.src) {
+          attempts.push({
+            provider: 'openrouter',
+            model,
+            keyIndex: 1,
+            httpStatus: res.status,
+            ok: true,
+            partKinds: extracted.partKinds,
+            base64Length: extracted.b64Len,
+            errorSnippet: ''
+          });
+          return { dataUri: extracted.src, attempts };
+        }
+
+        attempts.push({
+          provider: 'openrouter',
+          model,
+          keyIndex: 1,
+          httpStatus: res.status,
+          ok: false,
+          partKinds: extracted.partKinds,
+          base64Length: extracted.b64Len,
+          errorSnippet: extracted.snippet
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        attempts.push({
+          provider: 'openrouter',
+          model,
+          keyIndex: 1,
+          httpStatus: null,
+          ok: false,
+          partKinds: ['exception'],
+          base64Length: 0,
+          errorSnippet: msg.slice(0, 220)
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  // 2. Fallback ke Gemini langsung jika tersedia
+  const keys = getGeminiKeys();
+  const imageModels = ['gemini-2.5-flash-image'];
 
   for (let kIdx = 0; kIdx < keys.length; kIdx++) {
     const key = keys[kIdx];
@@ -409,6 +595,7 @@ async function generateArtworkDataUriWithDiagnostics(promptText: string): Promis
         const rawBody = await res.text().catch(() => '');
         if (!res.ok) {
           attempts.push({
+            provider: 'gemini',
             model,
             keyIndex: kIdx + 1,
             httpStatus: res.status,
@@ -435,6 +622,7 @@ async function generateArtworkDataUriWithDiagnostics(promptText: string): Promis
           parsedJson = JSON.parse(rawBody);
         } catch {
           attempts.push({
+            provider: 'gemini',
             model,
             keyIndex: kIdx + 1,
             httpStatus: res.status,
@@ -466,6 +654,7 @@ async function generateArtworkDataUriWithDiagnostics(promptText: string): Promis
             maxB64Length = Math.max(maxB64Length, b64.length);
             if (b64.length > 500) {
               attempts.push({
+                provider: 'gemini',
                 model,
                 keyIndex: kIdx + 1,
                 httpStatus: res.status,
@@ -480,6 +669,7 @@ async function generateArtworkDataUriWithDiagnostics(promptText: string): Promis
         }
 
         attempts.push({
+          provider: 'gemini',
           model,
           keyIndex: kIdx + 1,
           httpStatus: res.status,
@@ -495,6 +685,7 @@ async function generateArtworkDataUriWithDiagnostics(promptText: string): Promis
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         attempts.push({
+          provider: 'gemini',
           model,
           keyIndex: kIdx + 1,
           httpStatus: null,
@@ -586,21 +777,6 @@ function buildReferenceArtScene(params: {
       `<ellipse cx="${orbX}" cy="${orbY + 18}" rx="${orbR + 68}" ry="${Math.round(orbR * 0.24)}" transform="rotate(-14 ${orbX} ${orbY + 18})" fill="none" stroke="${accent}" stroke-width="4" opacity="0.65"/>`,
       `<ellipse cx="${orbX - orbR * 0.35}" cy="${orbY - orbR * 0.35}" rx="${Math.round(orbR * 0.16)}" ry="${Math.round(orbR * 0.28)}" transform="rotate(-32 ${orbX - orbR * 0.35} ${orbY - orbR * 0.35})" fill="#ffffff" opacity="0.28"/>`
     );
-
-    const miniOrbs = [
-      { dx: -0.29, dy: 0.45, r: 28 },
-      { dx: -0.23, dy: 0.56, r: 18 },
-      { dx: 0.78, dy: 0.48, r: 24 },
-      { dx: 0.84, dy: 0.62, r: 16 }
-    ];
-    for (const m of miniOrbs) {
-      const mx = x0 + Math.round(w * m.dx);
-      const my = y0 + Math.round(h * m.dy);
-      parts.push(
-        `<circle cx="${mx}" cy="${my}" r="${m.r}" fill="#0f294a" fill-opacity="0.75" stroke="${glow}" stroke-width="2.5"/>`,
-        `<circle cx="${mx - m.r * 0.28}" cy="${my - m.r * 0.28}" r="${Math.max(4, Math.round(m.r * 0.25))}" fill="#ffffff" opacity="0.35"/>`
-      );
-    }
   } else {
     const citX = x0 + Math.round(w * 0.54);
     const citY = y0 + Math.round(h * 0.22);
@@ -609,14 +785,7 @@ function buildReferenceArtScene(params: {
       `<circle cx="${citX}" cy="${citY + 45}" r="240" fill="${accent}" opacity="0.18"/>`,
       `<polygon points="${citX - 130},${citY + 110} ${citX - 130},${citY + 25} ${citX - 105},${citY - 25} ${citX - 80},${citY + 25} ${citX - 80},${citY + 110}" fill="#17345e" stroke="${accent}" stroke-width="2"/>`,
       `<polygon points="${citX - 55},${citY + 110} ${citX - 55},${citY - 15} ${citX},${citY - 115} ${citX + 55},${citY - 15} ${citX + 55},${citY + 110}" fill="#1f4375" stroke="${accent}" stroke-width="2.5"/>`,
-      `<polygon points="${citX + 75},${citY + 110} ${citX + 75},${citY + 15} ${citX + 102},${citY - 35} ${citX + 128},${citY + 15} ${citX + 128},${citY + 110}" fill="#17345e" stroke="${accent}" stroke-width="2"/>`,
-      `<path d="M ${citX - 25} ${citY + 110} L ${citX - 45} ${citY + 260} M ${citX + 12} ${citY + 110} L ${citX + 28} ${citY + 275}" stroke="${glow}" stroke-width="6" opacity="0.38"/>`,
-      `<path d="M ${x0 - 20} ${y0 + 180} Q ${x0 + 210} ${y0 + 250} ${x0 + 340} ${y0 + 430}" fill="none" stroke="#1e293b" stroke-width="14"/>`,
-      `<path d="M ${x0 - 20} ${y0 + 180} Q ${x0 + 210} ${y0 + 250} ${x0 + 340} ${y0 + 430}" fill="none" stroke="${accent}" stroke-width="3" opacity="0.7"/>`,
-      `<circle cx="${x0 + 190}" cy="${y0 + 275}" r="54" fill="${accent}" opacity="0.22"/>`,
-      `<circle cx="${x0 + 190}" cy="${y0 + 275}" r="36" fill="#0f294a" stroke="${glow}" stroke-width="3"/>`,
-      `<path d="M ${x0 - 20} ${y0 + h - 420} Q ${x0 + 190} ${y0 + h - 540} ${x0 + 310} ${y0 + h - 760}" fill="none" stroke="#1e293b" stroke-width="12"/>`,
-      `<circle cx="${x0 + 185}" cy="${y0 + h - 560}" r="42" fill="#0f294a" stroke="${accent}" stroke-width="2.5"/>`
+      `<polygon points="${citX + 75},${citY + 110} ${citX + 75},${citY + 15} ${citX + 102},${citY - 35} ${citX + 128},${citY + 15} ${citX + 128},${citY + 110}" fill="#17345e" stroke="${accent}" stroke-width="2"/>`
     );
   }
 
@@ -626,9 +795,7 @@ function buildReferenceArtScene(params: {
 
   parts.push(
     `<path d="M ${x0} ${ridge1} L ${x0 + Math.round(w * 0.22)} ${ridge1 - 95} L ${x0 + Math.round(w * 0.45)} ${ridge1 - 25} L ${x0 + Math.round(w * 0.72)} ${ridge1 - 110} L ${x0 + w} ${ridge1 - 35} L ${x0 + w} ${baseY} L ${x0} ${baseY} Z" fill="#0c203b" opacity="0.92"/>`,
-    `<path d="M ${x0} ${ridge2} C ${x0 + Math.round(w * 0.3)} ${ridge2 - 45}, ${x0 + Math.round(w * 0.65)} ${ridge2 + 35}, ${x0 + w} ${ridge2 - 20} L ${x0 + w} ${baseY} L ${x0} ${baseY} Z" fill="#060e1c" opacity="0.96"/>`,
-    `<ellipse cx="${x0 + Math.round(w * 0.54)}" cy="${y0 + Math.round(h * 0.88)}" rx="${Math.round(w * 0.24)}" ry="26" fill="${accent}" opacity="0.22"/>`,
-    `<ellipse cx="${x0 + Math.round(w * 0.54)}" cy="${y0 + Math.round(h * 0.91)}" rx="${Math.round(w * 0.14)}" ry="14" fill="${glow}" opacity="0.25"/>`
+    `<path d="M ${x0} ${ridge2} C ${x0 + Math.round(w * 0.3)} ${ridge2 - 45}, ${x0 + Math.round(w * 0.65)} ${ridge2 + 35}, ${x0 + w} ${ridge2 - 20} L ${x0 + w} ${baseY} L ${x0} ${baseY} Z" fill="#060e1c" opacity="0.96"/>`
   );
 
   return parts.join('\n');
