@@ -19,9 +19,9 @@ interface CoverArtPlan {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
-  sceneTheme: 'celestial' | 'botanical' | 'urban_noir' | 'romantic_horizon' | 'mystic_arch';
+  glowColor: string;
+  sceneTheme: 'glass_orchard' | 'celestial' | 'botanical' | 'urban_noir' | 'romantic_horizon' | 'mystic_arch';
   focalMotif: string;
-  atmosphereNote: string;
   source: string;
 }
 
@@ -93,9 +93,15 @@ function hashSeed(input: string): number {
 
 function normalizeTheme(
   rawTheme: unknown,
+  title: string,
   genre: string,
   synopsis: string
 ): CoverArtPlan['sceneTheme'] {
+  const combined = `${title} ${genre} ${synopsis}`.toLowerCase();
+  if (/glass|orchard|crystal|prism|translucent|kaca|kristal/.test(combined)) {
+    return 'glass_orchard';
+  }
+
   const t = String(rawTheme || '').toLowerCase().trim();
   if (
     t === 'celestial' ||
@@ -107,11 +113,10 @@ function normalizeTheme(
     return t;
   }
 
-  const combined = `${genre} ${synopsis}`.toLowerCase();
   if (/romance|love|heart|sunset|senja|cinta|rindu|wedding|autumn/.test(combined)) {
     return 'romantic_horizon';
   }
-  if (/forest|garden|orchard|nature|bloom|leaf|hutan|taman|bunga|alam/.test(combined)) {
+  if (/forest|garden|nature|bloom|leaf|hutan|taman|bunga|alam/.test(combined)) {
     return 'botanical';
   }
   if (/noir|crime|detective|city|rain|neon|shadow|kota|misteri|thriller/.test(combined)) {
@@ -144,17 +149,16 @@ async function callQwenCoverBrain(input: {
   ];
 
   const promptText = [
-    'You are the Lead Book Cover Art Director (Qwen AI) for CuanNovel.',
-    'Analyze the novel title, genre, and synopsis carefully to design a rich, evocative, non-generic cover concept.',
-    'Never suggest plain flat backgrounds or generic stock boxes.',
-    'Describe vivid story-specific visual scenes, lighting rays, foreground/midground/background depth, and emotional atmosphere.',
-    'Remember: NO text or letters should appear inside the illustration itself.',
+    'You are a Fine Art Book Cover Art Director (Qwen AI) for CuanNovel.',
+    'Create a rich, painterly, literary art direction for the book cover based on its title, genre, and synopsis.',
+    'Avoid plain flat shapes or minimalist geometric placeholders. Describe expressive artistic depth, light refraction, fine linework, and evocative story motifs.',
+    'Never put text or letters inside the artwork itself.',
     `Title: ${input.title}`,
     `Genre: ${input.genre}`,
     `Author: ${input.author}`,
     `Synopsis: ${input.synopsis.slice(0, 500)}`,
     'Return ONLY valid JSON with exact keys:',
-    '{"frontPrompt":"detailed front cover illustration prompt","backPrompt":"complementary back cover illustration prompt","tagline":"short evocative quote or tagline","focalMotif":"main story object or scene in 3-7 words","sceneTheme":"celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#0b1020","secondaryColor":"#1c2541","accentColor":"#e6b86a","atmosphereNote":"short visual mood note"}'
+    '{"frontPrompt":"rich painterly front cover art prompt","backPrompt":"complementary painterly back cover art prompt","tagline":"poetic short tagline","focalMotif":"evocative 3-6 word motif","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#0a101d","secondaryColor":"#17263b","accentColor":"#e7be70","glowColor":"#5eead4"}'
   ].join('\n');
 
   for (const model of qwenModels) {
@@ -167,12 +171,12 @@ async function callQwenCoverBrain(input: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openRouterKey}`,
           'HTTP-Referer': getEnv('APP_URL', 'https://cuannovel-automation.vercel.app'),
-          'X-Title': 'CuanNovel Cover Brain (Qwen)'
+          'X-Title': 'CuanNovel Fine Art Cover Brain (Qwen)'
         },
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: promptText }],
-          temperature: 0.78,
+          temperature: 0.8,
           max_tokens: 1024
         }),
         signal: controller.signal,
@@ -202,12 +206,12 @@ async function callQwenCoverBrain(input: {
           tagline: String(
             parsed.tagline || '“Every hidden truth leaves a mark that cannot be undone.”'
           ).trim(),
-          focalMotif: String(parsed.focalMotif || 'Story Focal Scene').trim(),
-          sceneTheme: normalizeTheme(parsed.sceneTheme, input.genre, input.synopsis),
-          primaryColor: normalizeHex(parsed.primaryColor, '#0b1020'),
-          secondaryColor: normalizeHex(parsed.secondaryColor, '#1b263b'),
-          accentColor: normalizeHex(parsed.accentColor, '#e6b86a'),
-          atmosphereNote: String(parsed.atmosphereNote || '').trim(),
+          focalMotif: String(parsed.focalMotif || 'Luminous Story Scene').trim(),
+          sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
+          primaryColor: normalizeHex(parsed.primaryColor, '#0a101d'),
+          secondaryColor: normalizeHex(parsed.secondaryColor, '#17263b'),
+          accentColor: normalizeHex(parsed.accentColor, '#e7be70'),
+          glowColor: normalizeHex(parsed.glowColor, '#5eead4'),
           source: `qwen:${model}`
         };
       }
@@ -247,20 +251,20 @@ async function callGeminiCoverBrain(input: {
                   parts: [
                     {
                       text: [
-                        'You are a Book Cover Art Director for CuanNovel.',
-                        'Design a rich, story-specific front and back cover visual concept from the novel description.',
+                        'You are a Fine Art Book Cover Art Director for CuanNovel.',
+                        'Design a painterly, literary front and back cover art concept from the novel description.',
                         `Title: ${input.title}`,
                         `Genre: ${input.genre}`,
                         `Author: ${input.author}`,
                         `Synopsis: ${input.synopsis.slice(0, 450)}`,
                         'Return ONLY valid JSON:',
-                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","sceneTheme":"celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#0b1020","secondaryColor":"#1b263b","accentColor":"#e6b86a"}'
+                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#0a101d","secondaryColor":"#17263b","accentColor":"#e7be70","glowColor":"#5eead4"}'
                       ].join('\n')
                     }
                   ]
                 }
               ],
-              generationConfig: { temperature: 0.75, maxOutputTokens: 1024 }
+              generationConfig: { temperature: 0.78, maxOutputTokens: 1024 }
             }),
             cache: 'no-store'
           }
@@ -282,12 +286,12 @@ async function callGeminiCoverBrain(input: {
             tagline: String(
               parsed.tagline || '“Every hidden truth leaves a mark that cannot be undone.”'
             ).trim(),
-            focalMotif: String(parsed.focalMotif || 'Story Focal Scene').trim(),
-            sceneTheme: normalizeTheme(parsed.sceneTheme, input.genre, input.synopsis),
-            primaryColor: normalizeHex(parsed.primaryColor, '#0b1020'),
-            secondaryColor: normalizeHex(parsed.secondaryColor, '#1b263b'),
-            accentColor: normalizeHex(parsed.accentColor, '#e6b86a'),
-            atmosphereNote: '',
+            focalMotif: String(parsed.focalMotif || 'Luminous Story Scene').trim(),
+            sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
+            primaryColor: normalizeHex(parsed.primaryColor, '#0a101d'),
+            secondaryColor: normalizeHex(parsed.secondaryColor, '#17263b'),
+            accentColor: normalizeHex(parsed.accentColor, '#e7be70'),
+            glowColor: normalizeHex(parsed.glowColor, '#5eead4'),
             source: `gemini:${model}`
           };
         }
@@ -317,16 +321,16 @@ async function planVisualDirection(input: {
     'Strictly NO text, NO letters, NO words, NO numbers, NO watermarks, NO logos, NO borders.';
 
   return {
-    frontPrompt: `Cinematic illustrated front cover scene for "${input.title}" (${input.genre}) inspired by: ${cleanSynopsis.slice(0, 240)}. Dramatic light shafts, layered depth, atmospheric storytelling focal point. ${noTextRule}`,
-    backPrompt: `Complementary atmospheric back cover scene for "${input.title}" (${input.genre}) expanding the story world with soft depth and glowing highlights. ${noTextRule}`,
+    frontPrompt: `Fine-art editorial novel front cover painting for "${input.title}" (${input.genre}) inspired by ${cleanSynopsis.slice(0, 220)}. Painterly depth, luminous highlights, intricate storytelling details. ${noTextRule}`,
+    backPrompt: `Complementary fine-art back cover painting for "${input.title}" (${input.genre}) with atmospheric depth, glowing light accents, and rich visual texture. ${noTextRule}`,
     tagline: '“Every hidden truth leaves a mark that cannot be undone.”',
-    focalMotif: 'Atmospheric Story Horizon',
-    sceneTheme: normalizeTheme(null, input.genre, input.synopsis),
-    primaryColor: '#0b1020',
-    secondaryColor: '#1b263b',
-    accentColor: '#e6b86a',
-    atmosphereNote: 'Fallback visual direction',
-    source: 'built-in-director'
+    focalMotif: 'Painterly Storyscape & Light',
+    sceneTheme: normalizeTheme(null, input.title, input.genre, input.synopsis),
+    primaryColor: '#0a101d',
+    secondaryColor: '#17263b',
+    accentColor: '#e7be70',
+    glowColor: '#5eead4',
+    source: 'built-in-fine-art-director'
   };
 }
 
@@ -381,7 +385,7 @@ async function generateArtworkDataUri(promptText: string): Promise<string | null
   return null;
 }
 
-function buildStorySceneArtwork(params: {
+function buildFineArtScene(params: {
   x: number;
   y: number;
   width: number;
@@ -391,94 +395,121 @@ function buildStorySceneArtwork(params: {
   role: 'front' | 'back';
 }): string {
   const s = hashSeed(params.seedKey);
-  const cx = params.x + Math.round(params.width * (params.role === 'front' ? 0.52 : 0.46));
-  const cy = params.y + Math.round(params.height * (params.role === 'front' ? 0.56 : 0.62));
-  const baseR = Math.round(Math.min(params.width, params.height) * 0.34);
+  const cx = params.x + Math.round(params.width * (params.role === 'front' ? 0.54 : 0.48));
+  const cy = params.y + Math.round(params.height * (params.role === 'front' ? 0.62 : 0.67));
+  const unit = Math.min(params.width, params.height);
   const accent = escapeHtml(params.plan.accentColor);
+  const glow = escapeHtml(params.plan.glowColor);
   const primary = escapeHtml(params.plan.primaryColor);
   const secondary = escapeHtml(params.plan.secondaryColor);
 
-  const rays: string[] = [];
-  const totalRays = 16;
-  for (let i = 0; i < totalRays; i++) {
-    const angle = ((i * 360) / totalRays + (s % 30)) * (Math.PI / 180);
-    const len = baseR * (1.1 + (((s + i * 73) % 45) / 100));
-    const x2 = cx + Math.round(Math.cos(angle) * len);
-    const y2 = cy + Math.round(Math.sin(angle) * len);
-    const strokeW = i % 2 === 0 ? 3.5 : 1.8;
-    const op = (0.14 + (((s + i * 31) % 24) / 100)).toFixed(2);
-    rays.push(
-      `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${accent}" stroke-width="${strokeW}" opacity="${op}"/>`
+  const artElements: string[] = [];
+
+  // Lapisan cahaya atmosferik & halo berlapis
+  artElements.push(
+    `<rect x="${params.x}" y="${params.y}" width="${params.width}" height="${params.height}" fill="${primary}"/>`,
+    `<circle cx="${cx}" cy="${cy - Math.round(unit * 0.06)}" r="${Math.round(unit * 0.44)}" fill="${secondary}" opacity="0.72"/>`,
+    `<circle cx="${cx}" cy="${cy - Math.round(unit * 0.06)}" r="${Math.round(unit * 0.29)}" fill="${accent}" opacity="0.16"/>`,
+    `<circle cx="${cx + Math.round(unit * 0.08)}" cy="${cy - Math.round(unit * 0.14)}" r="${Math.round(unit * 0.18)}" fill="${glow}" opacity="0.14"/>`
+  );
+
+  // Berkas cahaya diagonal bernuansa seni
+  for (let i = 0; i < 14; i++) {
+    const spread = ((i - 6.5) / 7) * 0.95 + (((s + i * 19) % 10) - 5) * 0.012;
+    const xTop = cx + Math.round(spread * params.width * 0.72);
+    const yTop = params.y + Math.round(params.height * 0.14);
+    const xBot = cx + Math.round(spread * params.width * 0.35);
+    const yBot = params.y + Math.round(params.height * 0.92);
+    const sw = i % 3 === 0 ? 4 : 1.8;
+    const op = (0.09 + ((i % 4) * 0.045)).toFixed(2);
+    artElements.push(
+      `<line x1="${xTop}" y1="${yTop}" x2="${xBot}" y2="${yBot}" stroke="${i % 2 === 0 ? accent : glow}" stroke-width="${sw}" opacity="${op}"/>`
     );
   }
 
-  const sparkles: string[] = [];
-  for (let i = 0; i < 28; i++) {
-    const sx = params.x + Math.round((((s + i * 887) % 1000) / 1000) * params.width);
-    const sy =
-      params.y +
-      Math.round(params.height * 0.18 + (((s + i * 541) % 1000) / 1000) * params.height * 0.75);
-    const r = 3 + ((s + i * 19) % 14);
-    const op = (0.22 + (((s + i * 37) % 62) / 100)).toFixed(2);
-    sparkles.push(`<circle cx="${sx}" cy="${sy}" r="${r}" fill="${accent}" opacity="${op}"/>`);
-  }
+  // Motif utama berdasarkan tema cerita
+  if (params.plan.sceneTheme === 'glass_orchard') {
+    const trunkBaseX = cx;
+    const trunkBaseY = params.y + Math.round(params.height * 0.93);
+    const crownY = cy - Math.round(unit * 0.04);
 
-  const horizonY = params.y + Math.round(params.height * 0.72);
-  const farRidgePath = `M ${params.x} ${horizonY - 90} C ${params.x + Math.round(params.width * 0.25)} ${horizonY - 240}, ${params.x + Math.round(params.width * 0.52)} ${horizonY - 40}, ${params.x + Math.round(params.width * 0.76)} ${horizonY - 190} S ${params.x + params.width} ${horizonY - 70}, ${params.x + params.width} ${horizonY - 70} L ${params.x + params.width} ${params.y + params.height} L ${params.x} ${params.y + params.height} Z`;
-  const midRidgePath = `M ${params.x} ${horizonY + 60} Q ${cx - Math.round(params.width * 0.28)} ${horizonY - 120} ${cx} ${horizonY + 25} T ${params.x + params.width} ${horizonY + 55} L ${params.x + params.width} ${params.y + params.height} L ${params.x} ${params.y + params.height} Z`;
+    // Batang & cabang pohon kaca yang melengkung artistik
+    artElements.push(
+      `<path d="M ${trunkBaseX - 24} ${trunkBaseY} C ${trunkBaseX - 10} ${trunkBaseY - 260}, ${trunkBaseX - 75} ${trunkBaseY - 520}, ${trunkBaseX - 220} ${crownY} L ${trunkBaseX - 196} ${crownY - 12} C ${trunkBaseX - 52} ${trunkBaseY - 510}, ${trunkBaseX + 12} ${trunkBaseY - 260}, ${trunkBaseX + 26} ${trunkBaseY} Z" fill="#131d31" stroke="${accent}" stroke-width="2.5" opacity="0.92"/>`
+    );
 
-  let motifLayer = '';
-  if (params.plan.sceneTheme === 'botanical') {
-    const branches: string[] = [];
-    for (let i = -3; i <= 3; i++) {
-      const bx = cx + i * Math.round(baseR * 0.22);
-      const by = cy - Math.abs(i) * Math.round(baseR * 0.08);
-      branches.push(
-        `<path d="M ${cx} ${params.y + params.height} Q ${cx + i * 40} ${cy + 80} ${bx} ${by}" fill="none" stroke="${accent}" stroke-width="5" opacity="0.55"/>`,
-        `<ellipse cx="${bx}" cy="${by - 18}" rx="22" ry="36" transform="rotate(${i * 16} ${bx} ${by - 18})" fill="${accent}" opacity="0.26" stroke="${accent}" stroke-width="2.5"/>`
+    const branchConfigs = [
+      { dx: -360, dy: -150, ctrlX: -190, ctrlY: -190, fruitX: -375, fruitY: -115, r: 34 },
+      { dx: 340, dy: -165, ctrlX: 175, ctrlY: -205, fruitX: 355, fruitY: -128, r: 38 },
+      { dx: -260, dy: -310, ctrlX: -120, ctrlY: -290, fruitX: -275, fruitY: -272, r: 28 },
+      { dx: 250, dy: -325, ctrlX: 115, ctrlY: -310, fruitX: 268, fruitY: -288, r: 32 },
+      { dx: -115, dy: -415, ctrlX: -45, ctrlY: -355, fruitX: -122, fruitY: -378, r: 26 },
+      { dx: 125, dy: -420, ctrlX: 55, ctrlY: -360, fruitX: 132, fruitY: -382, r: 30 }
+    ];
+
+    branchConfigs.forEach((b, idx) => {
+      const startY = trunkBaseY - 380 - idx * 45;
+      const endX = trunkBaseX + b.dx;
+      const endY = trunkBaseY - 460 + b.dy;
+      const cX = trunkBaseX + b.ctrlX;
+      const cY = trunkBaseY - 460 + b.ctrlY;
+      const fX = trunkBaseX + b.fruitX;
+      const fY = trunkBaseY - 460 + b.fruitY;
+      const fruitStroke = idx % 2 === 0 ? accent : glow;
+
+      artElements.push(
+        `<path d="M ${trunkBaseX} ${startY} Q ${cX} ${cY} ${endX} ${endY}" fill="none" stroke="${accent}" stroke-width="5.5" stroke-linecap="round" opacity="0.72"/>`,
+        `<line x1="${endX}" y1="${endY}" x2="${fX}" y2="${fY - b.r * 0.7}" stroke="${fruitStroke}" stroke-width="2.2" opacity="0.75"/>`,
+        `<circle cx="${fX}" cy="${fY}" r="${b.r + 14}" fill="${fruitStroke}" opacity="0.14"/>`,
+        `<circle cx="${fX}" cy="${fY}" r="${b.r}" fill="#17253b" fill-opacity="0.72" stroke="${fruitStroke}" stroke-width="3"/>`,
+        `<ellipse cx="${fX - b.r * 0.28}" cy="${fY - b.r * 0.3}" rx="${Math.round(b.r * 0.28)}" ry="${Math.round(b.r * 0.45)}" transform="rotate(-24 ${fX - b.r * 0.28} ${fY - b.r * 0.3})" fill="#ffffff" opacity="0.35"/>`
+      );
+    });
+
+    // Siluet kota/arsitektur melayang di latar belakang
+    for (let i = 0; i < 7; i++) {
+      const fx = params.x + Math.round(params.width * (0.14 + i * 0.115));
+      const fy = params.y + Math.round(params.height * (0.46 + ((s + i * 37) % 14) * 0.01));
+      const fw = 52 + ((s + i * 19) % 44);
+      const fh = 34 + ((s + i * 23) % 36);
+      artElements.push(
+        `<polygon points="${fx},${fy} ${fx + fw * 0.5},${fy - 14} ${fx + fw},${fy} ${fx + fw * 0.72},${fy + fh} ${fx + fw * 0.28},${fy + fh}" fill="#152238" fill-opacity="0.78" stroke="${accent}" stroke-opacity="0.42" stroke-width="1.8"/>`
       );
     }
-    motifLayer = branches.join('\n');
-  } else if (params.plan.sceneTheme === 'mystic_arch') {
-    motifLayer = `
-      <path d="M ${cx - Math.round(baseR * 0.52)} ${horizonY + 120} L ${cx - Math.round(baseR * 0.52)} ${cy - Math.round(baseR * 0.35)} A ${Math.round(baseR * 0.52)} ${Math.round(baseR * 0.52)} 0 0 1 ${cx + Math.round(baseR * 0.52)} ${cy - Math.round(baseR * 0.35)} L ${cx + Math.round(baseR * 0.52)} ${horizonY + 120}" fill="none" stroke="${accent}" stroke-width="6" opacity="0.65"/>
-      <circle cx="${cx}" cy="${cy - Math.round(baseR * 0.12)}" r="${Math.round(baseR * 0.24)}" fill="none" stroke="${accent}" stroke-width="3" opacity="0.55"/>
-    `;
-  } else if (params.plan.sceneTheme === 'urban_noir') {
-    const towers: string[] = [];
-    for (let i = 0; i < 9; i++) {
-      const tw = 70 + ((s + i * 31) % 75);
-      const th = 220 + ((s + i * 89) % 440);
-      const tx = params.x + Math.round((i / 9) * params.width);
-      const ty = horizonY + 80 - th;
-      towers.push(
-        `<rect x="${tx}" y="${ty}" width="${tw}" height="${th + 300}" fill="${secondary}" opacity="0.48" stroke="${accent}" stroke-opacity="0.22" stroke-width="2"/>`
-      );
-    }
-    motifLayer = towers.join('\n');
-  } else if (params.plan.sceneTheme === 'romantic_horizon') {
-    motifLayer = `
-      <circle cx="${cx}" cy="${cy - Math.round(baseR * 0.15)}" r="${Math.round(baseR * 0.58)}" fill="${accent}" opacity="0.22"/>
-      <circle cx="${cx}" cy="${cy - Math.round(baseR * 0.15)}" r="${Math.round(baseR * 0.36)}" fill="${accent}" opacity="0.34"/>
-      <path d="M ${cx - Math.round(baseR * 0.7)} ${horizonY + 95} Q ${cx} ${horizonY + 135} ${cx + Math.round(baseR * 0.7)} ${horizonY + 95}" fill="none" stroke="${accent}" stroke-width="4" opacity="0.5"/>
-    `;
   } else {
-    motifLayer = `
-      <circle cx="${cx}" cy="${cy - Math.round(baseR * 0.1)}" r="${Math.round(baseR * 0.48)}" fill="none" stroke="${accent}" stroke-width="4" opacity="0.55"/>
-      <circle cx="${cx}" cy="${cy - Math.round(baseR * 0.1)}" r="${Math.round(baseR * 0.28)}" fill="${accent}" opacity="0.22"/>
-    `;
+    // Motif seni berlapis untuk tema lain (botanical, urban_noir, romantic_horizon, mystic_arch, celestial)
+    for (let i = 0; i < 6; i++) {
+      const angle = ((i * 60 + (s % 45)) * Math.PI) / 180;
+      const px = cx + Math.round(Math.cos(angle) * unit * 0.22);
+      const py = cy - Math.round(unit * 0.06) + Math.round(Math.sin(angle) * unit * 0.22);
+      artElements.push(
+        `<circle cx="${px}" cy="${py}" r="${42 + (i % 3) * 16}" fill="none" stroke="${i % 2 === 0 ? accent : glow}" stroke-width="2.5" opacity="0.45"/>`,
+        `<circle cx="${px}" cy="${py}" r="${18 + (i % 2) * 10}" fill="${i % 2 === 0 ? accent : glow}" opacity="0.22"/>`
+      );
+    }
   }
 
-  return `
-    <rect x="${params.x}" y="${params.y}" width="${params.width}" height="${params.height}" fill="${primary}"/>
-    <circle cx="${cx}" cy="${cy}" r="${Math.round(baseR * 1.25)}" fill="${secondary}" opacity="0.65"/>
-    <circle cx="${cx}" cy="${cy}" r="${Math.round(baseR * 0.78)}" fill="${accent}" opacity="0.16"/>
-    ${rays.join('\n')}
-    <path d="${farRidgePath}" fill="${secondary}" opacity="0.72"/>
-    ${motifLayer}
-    <path d="${midRidgePath}" fill="#0a0f1c" opacity="0.88" stroke="${accent}" stroke-opacity="0.28" stroke-width="2.5"/>
-    ${sparkles.join('\n')}
-  `;
+  // Lanskap perbukitan & lembah berlapis di bagian bawah
+  const baseBottomY = params.y + params.height;
+  const hill1Y = params.y + Math.round(params.height * 0.77);
+  const hill2Y = params.y + Math.round(params.height * 0.84);
+
+  artElements.push(
+    `<path d="M ${params.x} ${hill1Y} C ${params.x + Math.round(params.width * 0.26)} ${hill1Y - 125}, ${params.x + Math.round(params.width * 0.58)} ${hill1Y + 75}, ${params.x + params.width} ${hill1Y - 65} L ${params.x + params.width} ${baseBottomY} L ${params.x} ${baseBottomY} Z" fill="#101a2e" opacity="0.9"/>`,
+    `<path d="M ${params.x} ${hill2Y} C ${params.x + Math.round(params.width * 0.34)} ${hill2Y + 85}, ${params.x + Math.round(params.width * 0.68)} ${hill2Y - 95}, ${params.x + params.width} ${hill2Y + 25} L ${params.x + params.width} ${baseBottomY} L ${params.x} ${baseBottomY} Z" fill="#090e1a" opacity="0.95" stroke="${accent}" stroke-opacity="0.32" stroke-width="2"/>`
+  );
+
+  // Partikel cahaya / kilau halus bertebaran
+  for (let i = 0; i < 36; i++) {
+    const gx = params.x + Math.round((((s + i * 797) % 1000) / 1000) * params.width);
+    const gy = params.y + Math.round(params.height * (0.2 + (((s + i * 521) % 1000) / 1000) * 0.72));
+    const gr = 2.5 + ((s + i * 17) % 9);
+    const gFill = i % 3 === 0 ? glow : accent;
+    const gOp = (0.25 + (((s + i * 29) % 60) / 100)).toFixed(2);
+    artElements.push(`<circle cx="${gx}" cy="${gy}" r="${gr}" fill="${gFill}" opacity="${gOp}"/>`);
+  }
+
+  return artElements.join('\n');
 }
 
 async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgentOutput> {
@@ -493,32 +524,32 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
   const backArt = await generateArtworkDataUri(plan.backPrompt);
 
   const titleLines = wrapSvgLines(title, 15, 3);
-  const blurbLines = wrapSvgLines(synopsis, 36, 8);
+  const blurbLines = wrapSvgLines(synopsis, 36, 9);
 
   const ebookTitleSvg = titleLines
     .map(
       (line, idx) =>
-        `<text x="800" y="${520 + idx * 145}" text-anchor="middle" font-family="Georgia, serif" font-size="132" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="800" y="${495 + idx * 142}" text-anchor="middle" font-family="Georgia, serif" font-size="130" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const wrapFrontTitleSvg = titleLines
     .map(
       (line, idx) =>
-        `<text x="2943" y="${540 + idx * 150}" text-anchor="middle" font-family="Georgia, serif" font-size="136" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="2943" y="${515 + idx * 148}" text-anchor="middle" font-family="Georgia, serif" font-size="134" font-weight="bold" fill="#f8fafc">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const blurbSvg = blurbLines
     .map(
       (line, idx) =>
-        `<text x="919" y="${345 + idx * 56}" text-anchor="middle" font-family="Georgia, serif" font-size="39" fill="#f8fafc">${escapeHtml(line)}</text>`
+        `<text x="919" y="${325 + idx * 54}" text-anchor="middle" font-family="Georgia, serif" font-size="38" fill="#f8fafc">${escapeHtml(line)}</text>`
     )
     .join('\n');
 
   const ebookArtLayer = frontArt
     ? `<image href="${escapeHtml(frontArt)}" x="-20" y="-20" width="1640" height="2680" preserveAspectRatio="xMidYMid slice"/>`
-    : buildStorySceneArtwork({
+    : buildFineArtScene({
         x: 0,
         y: 0,
         width: 1600,
@@ -530,7 +561,7 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
 
   const wrapBackArtLayer = backArt
     ? `<image href="${escapeHtml(backArt)}" x="-20" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
-    : buildStorySceneArtwork({
+    : buildFineArtScene({
         x: 0,
         y: 0,
         width: 1838,
@@ -542,7 +573,7 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
 
   const wrapFrontArtLayer = frontArt
     ? `<image href="${escapeHtml(frontArt)}" x="2004" y="-20" width="1878" height="2860" preserveAspectRatio="xMidYMid slice"/>`
-    : buildStorySceneArtwork({
+    : buildFineArtScene({
         x: 2024,
         y: 0,
         width: 1838,
@@ -556,18 +587,18 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
   <defs>
     <clipPath id="eb-clip"><rect x="0" y="0" width="1600" height="2560"/></clipPath>
     <linearGradient id="eb-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#070b12" stop-opacity="0.62"/>
-      <stop offset="48%" stop-color="#070b12" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070b12" stop-opacity="0.72"/>
+      <stop offset="0%" stop-color="#070b12" stop-opacity="0.58"/>
+      <stop offset="50%" stop-color="#070b12" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#070b12" stop-opacity="0.65"/>
     </linearGradient>
   </defs>
   <g clip-path="url(#eb-clip)">
     ${ebookArtLayer}
     <rect x="0" y="0" width="1600" height="2560" fill="url(#eb-scrim)"/>
     <rect x="68" y="68" width="1464" height="2424" fill="none" stroke="${escapeHtml(plan.accentColor)}" stroke-width="3" opacity="0.82"/>
-    <text x="800" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
+    <text x="800" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
     ${ebookTitleSvg}
-    <text x="800" y="2335" text-anchor="middle" font-family="Georgia, serif" font-size="76" letter-spacing="5" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
+    <text x="800" y="2345" text-anchor="middle" font-family="Georgia, serif" font-size="76" letter-spacing="5" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
   </g>
 </svg>`;
 
@@ -577,23 +608,23 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     <clipPath id="clip-spine"><rect x="1838" y="0" width="186" height="2775"/></clipPath>
     <clipPath id="clip-front"><rect x="2024" y="0" width="1838" height="2775"/></clipPath>
     <linearGradient id="back-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#070b12" stop-opacity="0.42"/>
-      <stop offset="50%" stop-color="#070b12" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070b12" stop-opacity="0.58"/>
+      <stop offset="0%" stop-color="#070b12" stop-opacity="0.38"/>
+      <stop offset="52%" stop-color="#070b12" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#070b12" stop-opacity="0.52"/>
     </linearGradient>
     <linearGradient id="front-scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#070b12" stop-opacity="0.62"/>
-      <stop offset="48%" stop-color="#070b12" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#070b12" stop-opacity="0.72"/>
+      <stop offset="0%" stop-color="#070b12" stop-opacity="0.58"/>
+      <stop offset="50%" stop-color="#070b12" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#070b12" stop-opacity="0.65"/>
     </linearGradient>
   </defs>
 
   <g clip-path="url(#clip-back)">
     ${wrapBackArtLayer}
     <rect x="0" y="0" width="1838" height="2775" fill="url(#back-scrim)"/>
-    <rect x="235" y="245" width="1368" height="765" fill="#090d14" fill-opacity="0.74" stroke="${escapeHtml(plan.accentColor)}" stroke-opacity="0.78" stroke-width="2.5"/>
+    <rect x="225" y="235" width="1388" height="820" fill="#090d14" fill-opacity="0.72" stroke="${escapeHtml(plan.accentColor)}" stroke-opacity="0.78" stroke-width="2.5"/>
     ${blurbSvg}
-    <text x="919" y="935" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="36" fill="#e2e8f0">${escapeHtml(plan.tagline)}</text>
+    <text x="919" y="995" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="35" fill="#e2e8f0">${escapeHtml(plan.tagline)}</text>
     <polygon points="340,2245 395,2213 450,2245 450,2309 395,2341 340,2309" fill="none" stroke="${escapeHtml(plan.accentColor)}" stroke-width="5"/>
     <polygon points="362,2258 395,2239 428,2258 428,2296 395,2315 362,2296" fill="none" stroke="#f8fafc" stroke-width="2.5"/>
     <text x="395" y="2415" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" letter-spacing="3" font-weight="bold" fill="#f8fafc">${escapeHtml(publisher)}</text>
@@ -613,7 +644,7 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     ${wrapFrontArtLayer}
     <rect x="2024" y="0" width="1838" height="2775" fill="url(#front-scrim)"/>
     <rect x="2125" y="135" width="1636" height="2505" fill="none" stroke="${escapeHtml(plan.accentColor)}" stroke-width="3" opacity="0.82"/>
-    <text x="2943" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
+    <text x="2943" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" letter-spacing="8" fill="#e2e8f0">${escapeHtml(genre.toUpperCase())}</text>
     ${wrapFrontTitleSvg}
     <text x="2943" y="2535" text-anchor="middle" font-family="Georgia, serif" font-size="82" letter-spacing="5" fill="#f8fafc">${escapeHtml(author.toUpperCase())}</text>
   </g>
@@ -693,7 +724,7 @@ export async function GET(req: NextRequest) {
 </head>
 <body>
   <h1>Cover Designer Agent: ${escapeHtml(result.title)}</h1>
-  <div class="meta">Brain: ${escapeHtml(result.brainProvider)} | Motif: ${escapeHtml(result.focalMotif)} | Front AI: ${result.frontGenerated ? 'Yes' : 'Scene Art'} | Back AI: ${result.backGenerated ? 'Yes' : 'Scene Art'}</div>
+  <div class="meta">Brain: ${escapeHtml(result.brainProvider)} | Motif: ${escapeHtml(result.focalMotif)} | Front AI: ${result.frontGenerated ? 'Yes' : 'Fine Art'} | Back AI: ${result.backGenerated ? 'Yes' : 'Fine Art'}</div>
   <div class="grid">
     <div class="card">
       <h2>E-Book Cover</h2>
