@@ -20,7 +20,6 @@ interface CoverArtPlan {
   secondaryColor: string;
   accentColor: string;
   glowColor: string;
-  sceneTheme: 'glass_orchard' | 'celestial' | 'botanical' | 'urban_noir' | 'romantic_horizon' | 'mystic_arch';
   focalMotif: string;
   source: string;
 }
@@ -81,7 +80,11 @@ function splitSynopsisIntoBlocks(synopsis: string): {
   closingLines: string[];
 } {
   const clean = String(synopsis || '').replace(/\s+/g, ' ').trim();
-  const sentences = clean.match(/[^.!?]+[.!?]+(?:\s|$)/g)?.map((s) => s.trim()).filter(Boolean) || [clean];
+  const sentences =
+    clean
+      .match(/[^.!?]+[.!?]+(?:\s|$)/g)
+      ?.map((s) => s.trim())
+      .filter(Boolean) || [clean];
 
   const hookText = sentences[0] || clean;
   const closingText = sentences.length >= 3 ? sentences[sentences.length - 1] : '';
@@ -115,43 +118,6 @@ function hashSeed(input: string): number {
   return Math.abs(h) >>> 0;
 }
 
-function normalizeTheme(
-  rawTheme: unknown,
-  title: string,
-  genre: string,
-  synopsis: string
-): CoverArtPlan['sceneTheme'] {
-  const combined = `${title} ${genre} ${synopsis}`.toLowerCase();
-  if (/glass|orchard|crystal|prism|translucent|citadel|kaca|kristal/.test(combined)) {
-    return 'glass_orchard';
-  }
-
-  const t = String(rawTheme || '').toLowerCase().trim();
-  if (
-    t === 'celestial' ||
-    t === 'botanical' ||
-    t === 'urban_noir' ||
-    t === 'romantic_horizon' ||
-    t === 'mystic_arch'
-  ) {
-    return t;
-  }
-
-  if (/romance|love|heart|sunset|senja|cinta|rindu|wedding|autumn/.test(combined)) {
-    return 'romantic_horizon';
-  }
-  if (/forest|garden|nature|bloom|leaf|hutan|taman|bunga|alam/.test(combined)) {
-    return 'botanical';
-  }
-  if (/noir|crime|detective|city|rain|neon|shadow|kota|misteri|thriller/.test(combined)) {
-    return 'urban_noir';
-  }
-  if (/magic|fantasy|archive|ancient|ruin|sihir|fantasi|rahasia/.test(combined)) {
-    return 'mystic_arch';
-  }
-  return 'celestial';
-}
-
 function normalizeHex(raw: unknown, fallback: string): string {
   const val = String(raw || '').trim();
   return /^#[0-9a-fA-F]{6}$/.test(val) ? val : fallback;
@@ -182,7 +148,7 @@ async function callQwenCoverBrain(input: {
     `Author: ${input.author}`,
     `Synopsis: ${input.synopsis.slice(0, 500)}`,
     'Return ONLY valid JSON with exact keys:',
-    '{"frontPrompt":"detailed front cover scene prompt","backPrompt":"complementary back cover scene prompt","tagline":"evocative short quote","focalMotif":"3-6 word main visual motif","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
+    '{"frontPrompt":"detailed front cover scene prompt","backPrompt":"complementary back cover scene prompt","tagline":"evocative short quote","focalMotif":"3-6 word main visual motif","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
   ].join('\n');
 
   for (const model of qwenModels) {
@@ -231,7 +197,6 @@ async function callQwenCoverBrain(input: {
             parsed.tagline || '“An enchanting journey of memory, wonder, and fragile beauty.”'
           ).trim(),
           focalMotif: String(parsed.focalMotif || 'Luminous Citadel & Golden Tree').trim(),
-          sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
           primaryColor: normalizeHex(parsed.primaryColor, '#071224'),
           secondaryColor: normalizeHex(parsed.secondaryColor, '#12325b'),
           accentColor: normalizeHex(parsed.accentColor, '#f3c969'),
@@ -282,7 +247,7 @@ async function callGeminiCoverBrain(input: {
                         `Author: ${input.author}`,
                         `Synopsis: ${input.synopsis.slice(0, 450)}`,
                         'Return ONLY valid JSON:',
-                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","sceneTheme":"glass_orchard|celestial|botanical|urban_noir|romantic_horizon|mystic_arch","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
+                        '{"frontPrompt":"...","backPrompt":"...","tagline":"...","focalMotif":"...","primaryColor":"#071224","secondaryColor":"#12325b","accentColor":"#f3c969","glowColor":"#67e8f9"}'
                       ].join('\n')
                     }
                   ]
@@ -311,7 +276,6 @@ async function callGeminiCoverBrain(input: {
               parsed.tagline || '“An enchanting journey of memory, wonder, and fragile beauty.”'
             ).trim(),
             focalMotif: String(parsed.focalMotif || 'Luminous Citadel & Golden Tree').trim(),
-            sceneTheme: normalizeTheme(parsed.sceneTheme, input.title, input.genre, input.synopsis),
             primaryColor: normalizeHex(parsed.primaryColor, '#071224'),
             secondaryColor: normalizeHex(parsed.secondaryColor, '#12325b'),
             accentColor: normalizeHex(parsed.accentColor, '#f3c969'),
@@ -349,7 +313,6 @@ async function planVisualDirection(input: {
     backPrompt: `Complementary fantasy back cover art for "${input.title}" (${input.genre}) showing a distant glowing citadel, floating light orbs, and tranquil night landscape. ${noTextRule}`,
     tagline: '“An enchanting journey of memory, wonder, and fragile beauty.”',
     focalMotif: 'Golden Tree in Crystal Sphere',
-    sceneTheme: normalizeTheme(null, input.title, input.genre, input.synopsis),
     primaryColor: '#071224',
     secondaryColor: '#12325b',
     accentColor: '#f3c969',
@@ -430,7 +393,6 @@ function buildReferenceArtScene(params: {
 
   const parts: string[] = [];
 
-  // Langit malam & cahaya nebula/bulan
   parts.push(
     `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="${primary}"/>`,
     `<circle cx="${x0 + Math.round(w * 0.52)}" cy="${y0 + Math.round(h * 0.44)}" r="${Math.round(w * 0.55)}" fill="${secondary}" opacity="0.72"/>`,
@@ -438,16 +400,16 @@ function buildReferenceArtScene(params: {
     `<circle cx="${x0 + Math.round(w * 0.76)}" cy="${y0 + Math.round(h * 0.34)}" r="${Math.round(w * 0.13)}" fill="#dbeafe" opacity="0.18"/>`
   );
 
-  // Bintang-bintang halus di langit
   for (let i = 0; i < 65; i++) {
     const sx = x0 + Math.round((((s + i * 941) % 1000) / 1000) * w);
     const sy = y0 + Math.round((((s + i * 577) % 1000) / 1000) * h * 0.75);
     const sr = 1.8 + ((s + i * 13) % 5);
     const op = (0.25 + (((s + i * 31) % 65) / 100)).toFixed(2);
-    parts.push(`<circle cx="${sx}" cy="${sy}" r="${sr}" fill="${i % 4 === 0 ? accent : '#f8fafc'}" opacity="${op}"/>`);
+    parts.push(
+      `<circle cx="${sx}" cy="${sy}" r="${sr}" fill="${i % 4 === 0 ? accent : '#f8fafc'}" opacity="${op}"/>`
+    );
   }
 
-  // Berkas cahaya sorot ke arah pusat ilustrasi
   const focalX = x0 + Math.round(w * (params.role === 'front' ? 0.52 : 0.5));
   const focalY = y0 + Math.round(h * (params.role === 'front' ? 0.62 : 0.36));
 
@@ -462,7 +424,6 @@ function buildReferenceArtScene(params: {
   }
 
   if (params.role === 'front') {
-    // Bola kristal & pohon bercahaya emas di tengah cover depan
     const orbX = x0 + Math.round(w * 0.52);
     const orbY = y0 + Math.round(h * 0.62);
     const orbR = Math.round(w * 0.25);
@@ -471,7 +432,6 @@ function buildReferenceArtScene(params: {
       `<circle cx="${orbX}" cy="${orbY}" r="${orbR + 36}" fill="${accent}" opacity="0.14"/>`,
       `<circle cx="${orbX}" cy="${orbY}" r="${orbR}" fill="#0c2444" fill-opacity="0.72" stroke="${glow}" stroke-width="4"/>`,
       `<circle cx="${orbX}" cy="${orbY}" r="${orbR - 10}" fill="none" stroke="${accent}" stroke-width="2" opacity="0.65"/>`,
-      // Pohon bercahaya di dalam bola
       `<path d="M ${orbX} ${orbY + orbR - 28} L ${orbX} ${orbY - 40}" stroke="${accent}" stroke-width="10" stroke-linecap="round"/>`,
       `<path d="M ${orbX} ${orbY + 10} Q ${orbX - 85} ${orbY - 45} ${orbX - 125} ${orbY - 105}" fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round"/>`,
       `<path d="M ${orbX} ${orbY - 5} Q ${orbX + 85} ${orbY - 60} ${orbX + 128} ${orbY - 115}" fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round"/>`,
@@ -483,12 +443,10 @@ function buildReferenceArtScene(params: {
       `<circle cx="${orbX}" cy="${orbY - 175}" r="46" fill="${accent}" opacity="0.52"/>`,
       `<circle cx="${orbX - 125}" cy="${orbY - 92}" r="30" fill="${glow}" opacity="0.38"/>`,
       `<circle cx="${orbX + 128}" cy="${orbY - 102}" r="34" fill="${accent}" opacity="0.45"/>`,
-      // Cincin cahaya melingkar & kilau kaca
       `<ellipse cx="${orbX}" cy="${orbY + 18}" rx="${orbR + 68}" ry="${Math.round(orbR * 0.24)}" transform="rotate(-14 ${orbX} ${orbY + 18})" fill="none" stroke="${accent}" stroke-width="4" opacity="0.65"/>`,
       `<ellipse cx="${orbX - orbR * 0.35}" cy="${orbY - orbR * 0.35}" rx="${Math.round(orbR * 0.16)}" ry="${Math.round(orbR * 0.28)}" transform="rotate(-32 ${orbX - orbR * 0.35} ${orbY - orbR * 0.35})" fill="#ffffff" opacity="0.28"/>`
     );
 
-    // Bola-bola kecil mengambang di sekitar
     const miniOrbs = [
       { dx: -0.29, dy: 0.45, r: 28 },
       { dx: -0.23, dy: 0.56, r: 18 },
@@ -504,19 +462,15 @@ function buildReferenceArtScene(params: {
       );
     }
   } else {
-    // Kastil/menara bercahaya di atas tebing & ranting bercahaya di sudut kiri cover belakang
     const citX = x0 + Math.round(w * 0.54);
     const citY = y0 + Math.round(h * 0.22);
 
     parts.push(
       `<circle cx="${citX}" cy="${citY + 45}" r="240" fill="${accent}" opacity="0.18"/>`,
-      // Menara & puncak kastil
       `<polygon points="${citX - 130},${citY + 110} ${citX - 130},${citY + 25} ${citX - 105},${citY - 25} ${citX - 80},${citY + 25} ${citX - 80},${citY + 110}" fill="#17345e" stroke="${accent}" stroke-width="2"/>`,
       `<polygon points="${citX - 55},${citY + 110} ${citX - 55},${citY - 15} ${citX},${citY - 115} ${citX + 55},${citY - 15} ${citX + 55},${citY + 110}" fill="#1f4375" stroke="${accent}" stroke-width="2.5"/>`,
       `<polygon points="${citX + 75},${citY + 110} ${citX + 75},${citY + 15} ${citX + 102},${citY - 35} ${citX + 128},${citY + 15} ${citX + 128},${citY + 110}" fill="#17345e" stroke="${accent}" stroke-width="2"/>`,
-      // Air terjun cahaya turun dari tebing
       `<path d="M ${citX - 25} ${citY + 110} L ${citX - 45} ${citY + 260} M ${citX + 12} ${citY + 110} L ${citX + 28} ${citY + 275}" stroke="${glow}" stroke-width="6" opacity="0.38"/>`,
-      // Ranting & daun/bola cahaya di sudut kiri atas & bawah
       `<path d="M ${x0 - 20} ${y0 + 180} Q ${x0 + 210} ${y0 + 250} ${x0 + 340} ${y0 + 430}" fill="none" stroke="#1e293b" stroke-width="14"/>`,
       `<path d="M ${x0 - 20} ${y0 + 180} Q ${x0 + 210} ${y0 + 250} ${x0 + 340} ${y0 + 430}" fill="none" stroke="${accent}" stroke-width="3" opacity="0.7"/>`,
       `<circle cx="${x0 + 190}" cy="${y0 + 275}" r="54" fill="${accent}" opacity="0.22"/>`,
@@ -526,7 +480,6 @@ function buildReferenceArtScene(params: {
     );
   }
 
-  // Pegunungan & perairan bercahaya di bagian bawah
   const baseY = y0 + h;
   const ridge1 = y0 + Math.round(h * 0.74);
   const ridge2 = y0 + Math.round(h * 0.82);
@@ -534,7 +487,6 @@ function buildReferenceArtScene(params: {
   parts.push(
     `<path d="M ${x0} ${ridge1} L ${x0 + Math.round(w * 0.22)} ${ridge1 - 95} L ${x0 + Math.round(w * 0.45)} ${ridge1 - 25} L ${x0 + Math.round(w * 0.72)} ${ridge1 - 110} L ${x0 + w} ${ridge1 - 35} L ${x0 + w} ${baseY} L ${x0} ${baseY} Z" fill="#0c203b" opacity="0.92"/>`,
     `<path d="M ${x0} ${ridge2} C ${x0 + Math.round(w * 0.3)} ${ridge2 - 45}, ${x0 + Math.round(w * 0.65)} ${ridge2 + 35}, ${x0 + w} ${ridge2 - 20} L ${x0 + w} ${baseY} L ${x0} ${baseY} Z" fill="#060e1c" opacity="0.96"/>`,
-    // Pantulan cahaya di air/lembah bawah
     `<ellipse cx="${x0 + Math.round(w * 0.54)}" cy="${y0 + Math.round(h * 0.88)}" rx="${Math.round(w * 0.24)}" ry="26" fill="${accent}" opacity="0.22"/>`,
     `<ellipse cx="${x0 + Math.round(w * 0.54)}" cy="${y0 + Math.round(h * 0.91)}" rx="${Math.round(w * 0.14)}" ry="14" fill="${glow}" opacity="0.25"/>`
   );
@@ -677,7 +629,6 @@ async function runCoverDesignerAgent(input: CoverAgentInput): Promise<CoverAgent
     <polygon points="275,2275 320,2248 365,2275 365,2328 320,2355 275,2328" fill="none" stroke="${escapeHtml(plan.accentColor)}" stroke-width="4"/>
     <text x="320" y="2415" text-anchor="middle" font-family="Georgia, serif" font-size="36" font-weight="bold" letter-spacing="2" fill="#f8fafc">${escapeHtml(publisher)}</text>
 
-    <!-- Area barcode kosong putih bersih sesuai permintaan -->
     <rect x="1135" y="2225" width="565" height="340" rx="6" fill="#ffffff"/>
   </g>
 
